@@ -10,6 +10,15 @@ This project is for learning. Every step we take gets written up in `docs/learni
 - Include the config and code changes we made, plus any gotchas we hit (errors, version pins, workarounds) and how we fixed them.
 - Update the matching learning doc in the same turn as the work. Don't leave it for later.
 
+# Task list rule (always follow, never skip)
+
+`docs/task-list.md` is the source of truth for tasks and branch names.
+
+- **Before planning or creating a branch,** read `docs/task-list.md`. Take the next ❌ task, or the task the developer names. Use its `Branch` column exactly as the branch name, and base the plan on its `What` and `Tests` columns.
+- **New work goes into the list first.** If a task isn't in the list, add it as a new ❌ row with the next number, and get the developer's OK before creating its branch.
+- **Status marks:** ❌ = not done, ✅ = done. When the task's changes are finished and the end-of-task checklist passes, change its ❌ to ✅ in the task's own branch **before** asking to commit, so the tick is part of that commit.
+- Never mark ✅ if tests, lint, type-check, or build fail. Never tick a task other than the current one.
+
 # Branch and commit rules (always follow, never skip)
 
 - **Never work on `main`.** Before changing any file, check the current branch. If it's `main`, stop and create a task branch first.
@@ -17,7 +26,7 @@ This project is for learning. Every step we take gets written up in `docs/learni
   - `01_installation_setup`
   - `02_adding_rules_for_learning_document`
   - `03_adding_rules_for_creating_branch`
-- Pick the next unused number. Check with `git branch -a` and `docs/learning/`.
+- Take the branch name from `docs/task-list.md` (see the task list rule). Don't invent names outside the list.
 - **Never commit, push, merge, or open a PR without the developer's explicit permission.** Make the changes, show them for review, then wait. Permission for one commit doesn't carry over to the next.
 - **Commit message format:** `<branch_name> <commit_message>`, with a short, clear message in the imperative mood. For example:
   - `03_adding_rules_for_creating_branch Add branch and commit rules to CLAUDE.md`
@@ -46,3 +55,25 @@ This project is for learning. Every step we take gets written up in `docs/learni
 
 - **Never commit `.env*` files, keys, or tokens.** Every new env var goes in `.env.example` with a placeholder value and a one-line comment saying what it's for.
 - **Never write a real token** in code, learning docs, logs, terminal output shown to the developer, or commit messages. Use placeholders like `<HF_TOKEN>`.
+
+# Workflow (always follow, never skip)
+
+- **Plan first.** Before coding a task, give a short plan: the files to change, the commands to run, and the tests to add. Wait for the developer's OK.
+- **Stay in scope.** Change only what the current task needs. No refactors or "improvements" elsewhere; suggest them separately as future tasks.
+- **Ask when unsure.** If a requirement or product decision is unclear, ask instead of guessing.
+- **Explain as you go.** This is a learning project, so after each change briefly say *why*, not just *what*.
+- **Ask before adding any package.** Say what it's for and its version before installing. Record it in the task's learning doc.
+- **End-of-task checklist.** Before asking to commit:
+  - Tests pass.
+  - `npm run lint` passes.
+  - Type-check (`npx tsc --noEmit`) passes.
+  - `npm run build` passes.
+  - The learning doc is updated.
+  - A short summary of the changes is given for review.
+  - Report any failure honestly, with its output.
+
+# Git extras (always follow, never skip)
+
+- **Branch base.** Each new task branch starts from the latest approved branch (or from `main` once merges start), never from an unapproved one, unless the developer says otherwise.
+- **No destructive git.** No force-push, `reset --hard`, rebasing or amending pushed commits, or deleting branches without the developer's explicit permission.
+- **Merge flow.** Claude never merges into `main`. After approval, Claude pushes the branch and opens a PR only when asked, and the developer reviews and merges it.
