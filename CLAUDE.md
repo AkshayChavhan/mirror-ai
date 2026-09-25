@@ -34,3 +34,15 @@ This project is for learning. Every step we take gets written up in `docs/learni
 - Run the tests before asking to commit, and report the result honestly. Include failures with their output.
 - Put the test commands, with their **Why:** lines, in that task's learning doc.
 - The test framework isn't installed yet. Setting it up (Vitest + Testing Library, and Playwright) is its own task and branch, done before the first feature.
+
+# Code rules
+
+- **Try-on model behind one function.** Only `lib/` calls the try-on model, through a single function such as `runTryOn()`. Nothing else imports `@gradio/client` or calls the HF Space directly, so switching providers (OOTDiffusion → CatVTON) touches one file.
+- **TypeScript is strict.** No `any`, `@ts-ignore`, or `@ts-expect-error` unless a comment explains why. Prefer `unknown` plus narrowing.
+- **Keep secrets on the server.** Service SDKs and secret keys (Prisma, Cloudinary, HF token, Clerk secret, Inngest) are used only in server code: Server Components, Route Handlers, Server Actions, `lib/`. Add `"use client"` only when a component needs state, effects, or browser APIs. Only env vars prefixed `NEXT_PUBLIC_` may reach the browser.
+- **Handle errors.** Catch model timeouts, quota or rate-limit errors, failed uploads, and DB errors. Show the user a clear, friendly message, never a raw stack trace or provider error. Log the details on the server. Every such failure path gets a test.
+
+# Security and secrets (always follow, never skip)
+
+- **Never commit `.env*` files, keys, or tokens.** Every new env var goes in `.env.example` with a placeholder value and a one-line comment saying what it's for.
+- **Never write a real token** in code, learning docs, logs, terminal output shown to the developer, or commit messages. Use placeholders like `<HF_TOKEN>`.
