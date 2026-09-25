@@ -21,3 +21,16 @@ This project is for learning. Every step we take gets written up in `docs/learni
 - **Never commit, push, merge, or open a PR without the developer's explicit permission.** Make the changes, show them for review, then wait. Permission for one commit doesn't carry over to the next.
 - **Commit message format:** `<branch_name> <commit_message>`, with a short, clear message in the imperative mood. For example:
   - `03_adding_rules_for_creating_branch Add branch and commit rules to CLAUDE.md`
+
+# Testing rule (always follow, never skip)
+
+- **Every feature gets its tests in the same task and branch.** Write them together with the feature, not later. A feature isn't done until its tests exist and pass.
+- **Colocate tests** next to the code: `lib/prisma.ts` gets `lib/prisma.test.ts`, and `app/components/Button.tsx` gets `app/components/Button.test.tsx`. E2E tests go in `e2e/`.
+- **Choose the test type** using `node_modules/next/dist/docs/01-app/02-guides/testing/`:
+  - Unit tests (Vitest) cover `lib/` functions, hooks, and synchronous Server and Client Components.
+  - E2E tests (Playwright) cover `async` Server Components and user flows. Vitest can't render async Server Components.
+- **Mock external services** in unit tests: the HF/Gradio try-on model, Cloudinary, Clerk, MongoDB, and Inngest. Unit tests must never call a real service or use real keys.
+- Cover the happy path plus the important failures (bad input, a service error, auth missing), and keep tests short.
+- Run the tests before asking to commit, and report the result honestly. Include failures with their output.
+- Put the test commands, with their **Why:** lines, in that task's learning doc.
+- The test framework isn't installed yet. Setting it up (Vitest + Testing Library, and Playwright) is its own task and branch, done before the first feature.
