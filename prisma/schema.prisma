@@ -1,0 +1,11 @@
+// Prisma schema for Mirror AI. Docs: https://pris.ly/d/prisma-schema
+// Prisma 6 (not 7/8), see docs/phase-0-findings.md. Models come in task 21, from the project plan.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}

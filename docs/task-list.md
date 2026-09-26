@@ -41,7 +41,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 17 | `17_replace_boilerplate_page` | Replace the starter page and metadata with a temporary Mirror AI home (no fake links); remove starter SVGs | Page unit tests (3) and e2e title/description check pass |
 | ✅ | 18 | `18_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
 | ✅ | 19 | `19_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` (placeholders only); `!.env.example` exception in `.gitignore` | `env-example.test.ts`: all vars listed, placeholders only, `.env` still ignored |
-| ❌ | 20 | `20_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, init for MongoDB | `prisma validate` passes |
+| ✅ | 20 | `20_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, `prisma/schema.prisma` for MongoDB with the classic `prisma-client-js` generator (no models yet; `prisma.config.ts` not used) | `prisma/schema.test.ts`: provider/generator checks and `prisma validate` passes |
 | ❌ | 21 | `21_add_prisma_schema` | `Product` and `TryOn` models from the plan | `prisma validate` + `prisma generate` |
 | ❌ | 22 | `22_add_prisma_client_lib` | `lib/prisma.ts` singleton | Same instance returned (mocked) |
 | ❌ | 23 | `23_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
@@ -61,7 +61,9 @@ Each task is one branch. The branch name is the `Branch` column exactly.
   - `skill-creator` may already be available here as `anthropic-skills:skill-creator`.
 - **08:** creating `.claude/agents/rules-reviewer.md` needs the developer's approval.
 - **16:** needs the plan from the developer. It blocks 21.
-- **20–26:** need a MongoDB Atlas URL, Clerk keys, and Cloudinary credentials in the developer's local `.env`, never in chat or commits.
+- **21–22:** need the plan (16), and a MongoDB Atlas URL in the developer's local `.env` to run against a real database.
+- **23–25:** need Clerk keys in the local `.env`, and as GitHub Actions secrets for CI (the build fails without a publishable key).
+- **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
 - **28–29:** need the decision from 27.
 
 ## Later (Phase 3+, not yet split into tasks)
