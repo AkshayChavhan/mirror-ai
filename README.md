@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mirror AI
 
-## Getting Started
+Virtual try-on: upload a photo of yourself and a garment, and see yourself wearing it. It covers tops, bottoms, and dresses.
 
-First, run the development server:
+This is also a **learning project**. Every step is written up in [`docs/learning/`](docs/learning/), with each command and why it was run.
+
+## Status
+
+Early setup. Tooling, tests, and CI are in place. The app itself (database, auth, uploads, try-on model) is being built task by task. See [`docs/task-list.md`](docs/task-list.md).
+
+## Stack
+
+| Area | In use | Planned |
+|---|---|---|
+| Framework | Next.js 16 (App Router), React 19, TypeScript | |
+| Styling | Tailwind CSS 4 | |
+| Tests | Vitest + Testing Library (unit), Playwright (E2E) | |
+| CI | GitHub Actions | |
+| Database | | MongoDB via Prisma 6 |
+| Auth | | Clerk |
+| Images | | Cloudinary |
+| Try-on model | | Hugging Face Space (OOTDiffusion or CatVTON, not decided yet, see [`docs/phase-0-findings.md`](docs/phase-0-findings.md)) |
+
+## Requirements
+
+- **Node 22.23.2**, pinned in [`.nvmrc`](.nvmrc). Run `fnm use` or `nvm use` in the project. fnm can switch automatically on `cd` if it's set up with `--use-on-cd`.
+- npm (comes with Node).
+
+## Getting started
 
 ```bash
+git clone https://github.com/AkshayChavhan/mirror-ai.git
+cd mirror-ai
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For E2E tests, install Playwright's browser once:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx playwright install chromium
+```
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server on port 3000 |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `next typegen && tsc --noEmit` (works on a fresh clone) |
+| `npm test` | Vitest unit tests, run once |
+| `npm run test:watch` | Vitest in watch mode |
+| `npm run test:e2e` | Playwright E2E tests against a production build on port 3100 |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How work happens
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Each task in [`docs/task-list.md`](docs/task-list.md) gets its own branch (`NN_task_name`), a learning doc, and tests.
+- Every PR into `main`, and `main` itself after each merge, runs CI: lint, typecheck, unit tests, and E2E tests, which include the build.
+- `main` is protected. Changes arrive only through PRs, and only after CI passes. PRs use GitHub **auto-merge**, so they merge themselves once CI is green.
+- Rules for AI-assisted work (Claude Code) are in [`CLAUDE.md`](CLAUDE.md).
 
-## Deploy on Vercel
+## Docs
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [`docs/task-list.md`](docs/task-list.md): all tasks and their status.
+- [`docs/learning/`](docs/learning/): step-by-step notes for every task.
+- [`docs/phase-0-findings.md`](docs/phase-0-findings.md): research on try-on models and package versions.
