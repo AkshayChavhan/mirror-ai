@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Read-only token: this workflow never writes to the repo.
+permissions:
+  contents: read
+
+# A new commit on the same PR cancels the run still in progress.
+# Runs on main are never cancelled, so every merge gets a finished check.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit + E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (exactly as in package-lock.json)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (next typegen + tsc)
+        run: npm run typecheck
+
+      - name: Unit tests (Vitest)
+        run: npm test
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      # Playwright's webServer runs `npm run build`, so this step also checks the build.
+      - name: E2E tests (Playwright)
+        run: npm run test:e2e
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-test-results
+          path: test-results/
+          # If an earlier step failed, E2E never ran and there is nothing to upload.
+          if-no-files-found: ignore
+          retention-days: 7

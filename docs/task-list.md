@@ -29,7 +29,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 10 | `10_add_typecheck_script` | `"typecheck": "next typegen && tsc --noEmit"` in `package.json`; point the `CLAUDE.md` checklist and `rules-reviewer` at it | `npm run typecheck` passes |
 | ✅ | 11 | `11_setup_vitest` | Vitest 5 + Testing Library + jest-dom, `vitest.config.mts` (Vite 8 built-in `@/` paths), `npm test` / `npm run test:watch`; `@types/node` 20 → 22 and `engines` tightened for jsdom 30 | Sample `app/page.test.tsx` passes; planted failure is reported |
 | ✅ | 12 | `12_setup_playwright` | `@playwright/test` 1.63.0 (Chromium only), `playwright.config.ts` (prod build on port 3100), `e2e/` folder, `npm run test:e2e`; checklist and reviewer run it | Smoke test: home page loads; planted failure is reported |
-| ❌ | 13 | `13_add_ci_workflow` | GitHub Actions: lint, typecheck, test, build on every PR | Workflow runs green on a PR |
+| ✅ | 13 | `13_add_ci_workflow` | GitHub Actions `.github/workflows/ci.yml`: Node from `.nvmrc`, `npm ci`, lint, `npm run typecheck`, `npm test`, Playwright Chromium + `npm run test:e2e` (includes build), on every PR and every update to `main` | Workflow runs green on its PR; a planted failing test turns it red |
 
 ## Group C: Phase 1 foundation
 
