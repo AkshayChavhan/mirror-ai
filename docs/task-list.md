@@ -39,7 +39,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 |---|---|---|---|---|
 | ❌ | 16 | `16_add_project_plan_doc` | Add the project plan (incl. `Product` / `TryOn` fields) to `docs/` | None (docs) |
 | ✅ | 17 | `17_replace_boilerplate_page` | Replace the starter page and metadata with a temporary Mirror AI home (no fake links); remove starter SVGs | Page unit tests (3) and e2e title/description check pass |
-| ❌ | 18 | `18_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
+| ✅ | 18 | `18_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
 | ❌ | 19 | `19_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` | None (no code) |
 | ❌ | 20 | `20_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, init for MongoDB | `prisma validate` passes |
 | ❌ | 21 | `21_add_prisma_schema` | `Product` and `TryOn` models from the plan | `prisma validate` + `prisma generate` |
