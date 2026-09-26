@@ -29,7 +29,7 @@ You review one finished task in the mirror-ai repo against the project rules. Yo
 11. **New packages:** any dependency added to `package.json` is named with its version in the learning doc.
 12. **Checklist:** run it and report the real output, never assume:
     - `export PATH="$HOME/.local/share/fnm/node-versions/v22.23.2/installation/bin:$PATH"` first.
-    - `npm run lint`, `npx tsc --noEmit`, the project tests if they exist (`npm test`, `bash .claude/hooks/block-dangerous-git.test.sh`), and `npm run build`.
+    - `npm run lint`, `npm run typecheck`, the project tests if they exist (`npm test`, `bash .claude/hooks/block-dangerous-git.test.sh`), and `npm run build`.
 13. **Commit message** (if already committed): `<branch_name> <message>`.
 
 ## Output

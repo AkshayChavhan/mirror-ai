@@ -66,7 +66,7 @@ This project is for learning. Every step we take gets written up in `docs/learni
 - **End-of-task checklist.** Before asking to commit:
   - Tests pass.
   - `npm run lint` passes.
-  - Type-check (`npx tsc --noEmit`) passes.
+  - `npm run typecheck` passes (runs `next typegen && tsc --noEmit`).
   - `npm run build` passes.
   - The learning doc is updated.
   - A short summary of the changes is given for review.
