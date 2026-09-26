@@ -25,7 +25,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 09 | `09_pin_node_version` | `.nvmrc` (`22.23.2`) and `engines` in `package.json` | None (config) |
+| ✅ | 09 | `09_pin_node_version` | `.nvmrc` (`22.23.2`) and `engines` in `package.json` | None (config) |
 | ❌ | 10 | `10_add_typecheck_script` | `"typecheck": "tsc --noEmit"` in `package.json` | `npm run typecheck` passes |
 | ❌ | 11 | `11_setup_vitest` | Vitest + Testing Library, `npm test` script | One sample test passes |
 | ❌ | 12 | `12_setup_playwright` | Playwright, `e2e/` folder | Smoke test: home page loads |
