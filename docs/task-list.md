@@ -48,7 +48,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ❌ | 24 | `24_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
 | ❌ | 25 | `25_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
 | ✅ | 26 | `26_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts`: `uploadImage()` with friendly `ImageUploadError`s and server-side logging | `lib/cloudinary.test.ts` (SDK mocked): success, empty file, missing env, provider error hidden from users |
-| ❌ | 27 | `27_decide_tryon_model` | Record the model choice (OOTDiffusion / self-host / wait) in docs | None (decision) |
+| ✅ | 27 | `27_decide_tryon_model` | Chose **OOTDiffusion** (`levihsu/OOTDiffusion`, `/process_dc`); verified status and API; recorded params, return shape, and risks (non-commercial license, shared ZeroGPU quota) in `docs/project-plan.md` | None (decision) |
 | ❌ | 28 | `28_install_gradio_client` | `@gradio/client@2.7.0` | Import works in a server-only test |
 | ❌ | 29 | `29_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
 
@@ -63,7 +63,6 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 - **24:** the access rules are an open question in `docs/project-plan.md` (the developer chose "something else").
 - **23–25:** need Clerk keys in the local `.env`, and as GitHub Actions secrets for CI (the build fails without a publishable key).
 - **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
-- **28–29:** need the decision from 27.
 
 ## Later (Phase 3+, not yet split into tasks)
 

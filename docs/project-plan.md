@@ -89,7 +89,35 @@ Source: `docs/phase-0-findings.md` (the OOTDiffusion categories, and CatVTON's `
 | `LOWER` | `lower` | `Lower-body` |
 | `OVERALL` | `overall` | `Dress` |
 
-- The model choice is still open (task 27). The mapping lives only in `lib/tryon.ts` (code rules).
+- The mapping lives only in `lib/tryon.ts` (code rules).
+
+## Try-on model (decided 2026-09-26, task 27)
+
+**OOTDiffusion**, via the Hugging Face Space `levihsu/OOTDiffusion`. This was the developer's choice (option 1): it's free and running, and it covers all 3 categories.
+
+Verified on 2026-09-26:
+- `huggingface.co/api/spaces/levihsu/OOTDiffusion/runtime` returns `RUNNING`, on `zero-a10g` (ZeroGPU).
+- Endpoint **`/process_dc`**, from `https://levihsu-ootdiffusion.hf.space/gradio_api/info`:
+
+| Param | Type | Default | Range | Our value |
+|---|---|---|---|---|
+| `vton_img` | image (person) | a **sample image** | — | the `TryOn.personUrl` image, **always passed** |
+| `garm_img` | image (garment) | a **sample image** | — | the `Product.imageUrl` image, **always passed** |
+| `category` | `"Upper-body"` / `"Lower-body"` / `"Dress"` | `Upper-body` | — | mapped from `Product.category` |
+| `n_samples` | number | 1 | 1–4 | 1 |
+| `n_steps` | number | 20 | 20–40 | 20 |
+| `image_scale` | number | 2.0 | 1.0–5.0 | 2.0 |
+| `seed` | number | -1 (random) | -1 to 2147483647 | -1 |
+
+- **Both images must always be passed.** The Space has sample-image defaults, so a missing image silently produces a result for the demo picture instead of an error.
+- **Returns:** a Gallery, a list of `{ image, caption }` **or** `{ video, caption }` items. We take the first item that has an `image`, and treat none as a failure.
+- `/process_hd` exists too, but it's upper-body only, so we don't use it.
+
+Risks:
+- ⚠️ **License: `cc-by-nc-sa-4.0` (non-commercial).** Fine for learning and demos. **Not allowed for commercial use** (for example, selling via buy links or charging users) without the authors' permission, or switching to a model licensed for commercial use.
+- **Shared quota:** ZeroGPU bills GPU time to the calling `HF_TOKEN`. All users share the server token's daily quota, which is why try-ons are rate-limited per user.
+- **Quality:** lower than CatVTON. Sarees are untested.
+- **Switching later** (for example, to self-hosted CatVTON) only changes `lib/tryon.ts` (task 29).
 
 ## Privacy
 
