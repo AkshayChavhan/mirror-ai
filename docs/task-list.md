@@ -37,7 +37,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 16 | `16_add_project_plan_doc` | Add the project plan (incl. `Product` / `TryOn` fields) to `docs/` | None (docs) |
+| ✅ | 16 | `16_add_project_plan_doc` | `docs/project-plan.md`: users and access, pages, `Product` / `TryOn` (+ assumed `WishlistItem`) fields, category mapping, 24 h privacy auto-delete, job lifecycle | None (docs) |
 | ✅ | 17 | `17_replace_boilerplate_page` | Replace the starter page and metadata with a temporary Mirror AI home (no fake links); remove starter SVGs | Page unit tests (3) and e2e title/description check pass |
 | ✅ | 18 | `18_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
 | ✅ | 19 | `19_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` (placeholders only); `!.env.example` exception in `.gitignore` | `env-example.test.ts`: all vars listed, placeholders only, `.env` still ignored |
@@ -60,8 +60,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
   - Installing the guardrail hook changes `.claude/settings.json`, so the developer must approve that step.
   - `skill-creator` may already be available here as `anthropic-skills:skill-creator`.
 - **08:** creating `.claude/agents/rules-reviewer.md` needs the developer's approval.
-- **16:** needs the plan from the developer. It blocks 21.
-- **21–22:** need the plan (16), and a MongoDB Atlas URL in the developer's local `.env` to run against a real database.
+- **21–22:** need a MongoDB Atlas URL in the developer's local `.env` to run against a real database.
 - **23–25:** need Clerk keys in the local `.env`, and as GitHub Actions secrets for CI (the build fails without a publishable key).
 - **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
 - **28–29:** need the decision from 27.

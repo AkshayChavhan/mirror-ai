@@ -65,6 +65,7 @@ npx playwright install chromium
 
 ## Docs
 
+- [`docs/project-plan.md`](docs/project-plan.md): pages, users, data model, privacy, and the try-on flow.
 - [`docs/task-list.md`](docs/task-list.md): all tasks and their status.
 - [`docs/learning/`](docs/learning/): step-by-step notes for every task.
 - [`docs/phase-0-findings.md`](docs/phase-0-findings.md): research on try-on models and package versions.
