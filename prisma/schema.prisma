@@ -1,5 +1,5 @@
 // Prisma schema for Mirror AI. Docs: https://pris.ly/d/prisma-schema
-// Prisma 6 (not 7/8), see docs/phase-0-findings.md. Models come in task 21, from the project plan.
+// Prisma 6 (not 7/8), see docs/phase-0-findings.md. Data model: docs/project-plan.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -8,4 +8,77 @@ generator client {
 datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
+}
+
+/// Garment category. Mapped to the try-on model's cloth type in lib/tryon.ts only.
+enum Category {
+  UPPER
+  LOWER
+  OVERALL
+}
+
+enum TryOnStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+/// A garment someone can try on. Only admins create, edit, or delete products.
+model Product {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  /// Clean garment image on a plain background, stored on Cloudinary.
+  imageUrl    String
+  category    Category
+  price       Float?
+  description String?
+  buyLink     String?
+  /// Hide a product without deleting it.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tryOns        TryOn[]
+  wishlistItems WishlistItem[]
+
+  @@index([isActive])
+}
+
+/// One try-on attempt. Images and the row itself are deleted after 24 hours (privacy cron).
+model TryOn {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  /// Clerk user id.
+  userId       String
+  productId    String      @db.ObjectId
+  product      Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// The captured person photo (Cloudinary).
+  personUrl    String
+  /// Null until the job is DONE.
+  resultUrl    String?
+  status       TryOnStatus @default(PENDING)
+  /// User-safe message when status is FAILED.
+  errorMessage String?
+  createdAt    DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  /// For the 24 h cleanup cron, which finds old try-ons across all users.
+  @@index([createdAt])
+}
+
+/// A saved product. Works signed out (anonymousId from a cookie) and signed in (userId).
+/// On sign-in, anonymous items are moved to the user. The same product may be saved more than once.
+/// The app must always set userId or anonymousId (MongoDB/Prisma can't enforce "at least one").
+model WishlistItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Clerk user id, set when signed in.
+  userId      String?
+  /// Anonymous visitor id from a cookie, set when signed out.
+  anonymousId String?
+  productId   String   @db.ObjectId
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([anonymousId])
 }
