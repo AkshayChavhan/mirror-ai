@@ -19,7 +19,7 @@ Early setup. Tooling, tests, and CI are in place. The app itself (database, auth
 | Database | Prisma 6 with MongoDB models `Product`, `TryOn`, `WishlistItem` (`prisma/schema.prisma`) | A live MongoDB connection |
 | Auth | | Clerk |
 | Images | Cloudinary upload helper (`lib/cloudinary.ts`) | Wiring it into upload forms |
-| Try-on model | | **OOTDiffusion** Hugging Face Space (decided, see [`docs/project-plan.md`](docs/project-plan.md#try-on-model-decided-2026-09-26-task-27)). Non-commercial license |
+| Try-on model | **OOTDiffusion** Hugging Face Space via `runTryOn()` in `lib/tryon.ts` (see [`docs/project-plan.md`](docs/project-plan.md#try-on-model-decided-2026-09-26-task-27)). Non-commercial license | Background job (Inngest) and UI |
 
 ## Requirements
 
