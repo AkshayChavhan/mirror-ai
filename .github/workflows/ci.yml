@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Read-only token: this workflow never writes to the repo.
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit + E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v7
+
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (exactly as in package-lock.json)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck (next typegen + tsc)
+        run: npm run typecheck
+
+      - name: Unit tests (Vitest)
+        run: npm test
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      # Playwright's webServer runs `npm run build`, so this step also checks the build.
+      - name: E2E tests (Playwright)
+        run: npm run test:e2e
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 7
