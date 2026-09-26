@@ -18,7 +18,7 @@ Early setup. Tooling, tests, and CI are in place. The app itself (database, auth
 | CI | GitHub Actions | |
 | Database | Prisma 6 (MongoDB provider, schema in `prisma/`) | Models and a live MongoDB connection |
 | Auth | | Clerk |
-| Images | | Cloudinary |
+| Images | Cloudinary upload helper (`lib/cloudinary.ts`) | Wiring it into upload forms |
 | Try-on model | | Hugging Face Space (OOTDiffusion or CatVTON, not decided yet, see [`docs/phase-0-findings.md`](docs/phase-0-findings.md)) |
 
 ## Requirements

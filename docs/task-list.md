@@ -47,7 +47,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ❌ | 23 | `23_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
 | ❌ | 24 | `24_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
 | ❌ | 25 | `25_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
-| ❌ | 26 | `26_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts` upload helper | Upload success and failure (SDK mocked) |
+| ✅ | 26 | `26_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts`: `uploadImage()` with friendly `ImageUploadError`s and server-side logging | `lib/cloudinary.test.ts` (SDK mocked): success, empty file, missing env, provider error hidden from users |
 | ❌ | 27 | `27_decide_tryon_model` | Record the model choice (OOTDiffusion / self-host / wait) in docs | None (decision) |
 | ❌ | 28 | `28_install_gradio_client` | `@gradio/client@2.7.0` | Import works in a server-only test |
 | ❌ | 29 | `29_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
