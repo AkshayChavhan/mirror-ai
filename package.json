@@ -16,6 +16,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.9.7",
     "@gradio/client": "^2.7.0",
     "@prisma/client": "^6.19.3",
     "cloudinary": "^2.11.0",

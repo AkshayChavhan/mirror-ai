@@ -21,6 +21,11 @@ jobs:
     name: Lint, typecheck, unit + E2E tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Clerk keys from repo secrets (Settings → Secrets and variables → Actions).
+    # Needed once proxy.ts / sign-in pages call Clerk (tasks 24–25). Test-mode keys only.
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
     steps:
       - name: Check out code
         uses: actions/checkout@v7
