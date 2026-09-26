@@ -26,7 +26,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         {/* Clerk (auth) for the whole app. Per Clerk's docs it goes inside <body>, not around <html>. */}
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          signInFallbackRedirectUrl="/"
+          signUpFallbackRedirectUrl="/"
+        >
+          {children}
+        </ClerkProvider>
       </body>
     </html>
   );

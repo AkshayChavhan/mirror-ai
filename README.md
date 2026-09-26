@@ -17,7 +17,7 @@ Early setup. Tooling, tests, and CI are in place. The app itself (database, auth
 | Tests | Vitest + Testing Library (unit), Playwright (E2E) | |
 | CI | GitHub Actions | |
 | Database | Prisma 6 with MongoDB models `Product`, `TryOn`, `WishlistItem` (`prisma/schema.prisma`) | A live MongoDB connection |
-| Auth | Clerk (`@clerk/nextjs` 7, `<ClerkProvider>` in the root layout) | Route protection (`proxy.ts`) and sign-in pages |
+| Auth | Clerk (`@clerk/nextjs` 7): `<ClerkProvider>` in the root layout, `/sign-in` and `/sign-up` pages | Route protection (`proxy.ts`) |
 | Images | Cloudinary upload helper (`lib/cloudinary.ts`) | Wiring it into upload forms |
 | Try-on model | **OOTDiffusion** Hugging Face Space via `runTryOn()` in `lib/tryon.ts` (see [`docs/project-plan.md`](docs/project-plan.md#try-on-model-decided-2026-09-26-task-27)). Non-commercial license | Background job (Inngest) and UI |
 
