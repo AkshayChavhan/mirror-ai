@@ -43,7 +43,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 19 | `19_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` (placeholders only); `!.env.example` exception in `.gitignore` | `env-example.test.ts`: all vars listed, placeholders only, `.env` still ignored |
 | ✅ | 20 | `20_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, `prisma/schema.prisma` for MongoDB with the classic `prisma-client-js` generator (no models yet; `prisma.config.ts` not used) | `prisma/schema.test.ts`: provider/generator checks and `prisma validate` passes |
 | ✅ | 21 | `21_add_prisma_schema` | `Product`, `TryOn`, `WishlistItem` (anonymous or user, duplicates allowed) models and `Category` / `TryOnStatus` enums, with indexes and cascade deletes | `prisma validate`, plus generated-client field and enum checks |
-| ❌ | 22 | `22_add_prisma_client_lib` | `lib/prisma.ts` singleton | Same instance returned (mocked) |
+| ✅ | 22 | `22_add_prisma_client_lib` | `lib/prisma.ts`: one `PrismaClient`, cached on `globalThis` in development (hot-reload safe) | `lib/prisma.test.ts` (mocked): created once, reused across reloads, not cached in production |
 | ❌ | 23 | `23_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
 | ❌ | 24 | `24_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
 | ❌ | 25 | `25_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
@@ -60,7 +60,6 @@ Each task is one branch. The branch name is the `Branch` column exactly.
   - Installing the guardrail hook changes `.claude/settings.json`, so the developer must approve that step.
   - `skill-creator` may already be available here as `anthropic-skills:skill-creator`.
 - **08:** creating `.claude/agents/rules-reviewer.md` needs the developer's approval.
-- **22:** needs a MongoDB Atlas URL in the developer's local `.env` to run against a real database.
 - **24:** the access rules are an open question in `docs/project-plan.md` (the developer chose "something else").
 - **23–25:** need Clerk keys in the local `.env`, and as GitHub Actions secrets for CI (the build fails without a publishable key).
 - **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
