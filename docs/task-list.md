@@ -2,7 +2,7 @@
 
 Each task is one branch. The branch name is the `Branch` column exactly.
 
-**Status:** ❌ = not done. ✅ = changes done and checked (tests, lint, type-check, build, learning doc). Switch ❌ to ✅ in the task's own branch **before** asking to commit.
+**Status:** ❌ = not done. ✅ = changes done and checked (tests, lint, type-check, build, learning doc). Switch ❌ to ✅ in the task's own branch **before** committing.
 
 ## Group A: commit the work already done
 
@@ -31,25 +31,26 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 12 | `12_setup_playwright` | `@playwright/test` 1.63.0 (Chromium only), `playwright.config.ts` (prod build on port 3100), `e2e/` folder, `npm run test:e2e`; checklist and reviewer run it | Smoke test: home page loads; planted failure is reported |
 | ✅ | 13 | `13_add_ci_workflow` | GitHub Actions `.github/workflows/ci.yml`: Node from `.nvmrc`, `npm ci`, lint, `npm run typecheck`, `npm test`, Playwright Chromium + `npm run test:e2e` (includes build), on every PR and every update to `main` | Workflow runs green on its PR; a planted failing test turns it red |
 | ✅ | 14 | `14_add_branch_protection` | Branch protection on `main`: the CI check must pass, the PR branch must be up to date, rules apply to admins too, no force updates or deletion of `main`, no required reviews (solo developer) | Settings read back via `gh api`; a PR with a failing test shows merging blocked |
+| ✅ | 15 | `15_enable_auto_merge` | Full auto-merge (developer's choice): `CLAUDE.md` rules so Claude commits, opens the PR, and runs `gh pr merge --auto --merge` on every task; GitHub merges only when CI passes; Claude stops only when a task needs the developer | This task's own PR merges by itself once CI is green |
 
 ## Group C: Phase 1 foundation
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 15 | `15_add_project_plan_doc` | Add the project plan (incl. `Product` / `TryOn` fields) to `docs/` | None (docs) |
-| ❌ | 16 | `16_replace_boilerplate_page` | Replace the starter page and metadata | Page unit test, and update the e2e smoke test |
-| ❌ | 17 | `17_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
-| ❌ | 18 | `18_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` | None (no code) |
-| ❌ | 19 | `19_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, init for MongoDB | `prisma validate` passes |
-| ❌ | 20 | `20_add_prisma_schema` | `Product` and `TryOn` models from the plan | `prisma validate` + `prisma generate` |
-| ❌ | 21 | `21_add_prisma_client_lib` | `lib/prisma.ts` singleton | Same instance returned (mocked) |
-| ❌ | 22 | `22_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
-| ❌ | 23 | `23_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
-| ❌ | 24 | `24_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
-| ❌ | 25 | `25_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts` upload helper | Upload success and failure (SDK mocked) |
-| ❌ | 26 | `26_decide_tryon_model` | Record the model choice (OOTDiffusion / self-host / wait) in docs | None (decision) |
-| ❌ | 27 | `27_install_gradio_client` | `@gradio/client@2.7.0` | Import works in a server-only test |
-| ❌ | 28 | `28_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
+| ❌ | 16 | `16_add_project_plan_doc` | Add the project plan (incl. `Product` / `TryOn` fields) to `docs/` | None (docs) |
+| ❌ | 17 | `17_replace_boilerplate_page` | Replace the starter page and metadata | Page unit test, and update the e2e smoke test |
+| ❌ | 18 | `18_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
+| ❌ | 19 | `19_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` | None (no code) |
+| ❌ | 20 | `20_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, init for MongoDB | `prisma validate` passes |
+| ❌ | 21 | `21_add_prisma_schema` | `Product` and `TryOn` models from the plan | `prisma validate` + `prisma generate` |
+| ❌ | 22 | `22_add_prisma_client_lib` | `lib/prisma.ts` singleton | Same instance returned (mocked) |
+| ❌ | 23 | `23_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
+| ❌ | 24 | `24_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
+| ❌ | 25 | `25_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
+| ❌ | 26 | `26_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts` upload helper | Upload success and failure (SDK mocked) |
+| ❌ | 27 | `27_decide_tryon_model` | Record the model choice (OOTDiffusion / self-host / wait) in docs | None (decision) |
+| ❌ | 28 | `28_install_gradio_client` | `@gradio/client@2.7.0` | Import works in a server-only test |
+| ❌ | 29 | `29_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
 
 ## Blockers
 
@@ -59,9 +60,9 @@ Each task is one branch. The branch name is the `Branch` column exactly.
   - Installing the guardrail hook changes `.claude/settings.json`, so the developer must approve that step.
   - `skill-creator` may already be available here as `anthropic-skills:skill-creator`.
 - **08:** creating `.claude/agents/rules-reviewer.md` needs the developer's approval.
-- **15:** needs the plan from the developer. It blocks 20.
-- **19–25:** need a MongoDB Atlas URL, Clerk keys, and Cloudinary credentials in the developer's local `.env`, never in chat or commits.
-- **27–28:** need the decision from 26.
+- **16:** needs the plan from the developer. It blocks 21.
+- **20–26:** need a MongoDB Atlas URL, Clerk keys, and Cloudinary credentials in the developer's local `.env`, never in chat or commits.
+- **28–29:** need the decision from 27.
 
 ## Later (Phase 3+, not yet split into tasks)
 

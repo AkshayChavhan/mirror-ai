@@ -1,6 +1,6 @@
 ---
 name: rules-reviewer
-description: Read-only reviewer. Use after a task's changes are finished and before asking the developer to commit. Checks the current branch's changes against every rule in CLAUDE.md and docs/task-list.md, and reports violations. Never edits files.
+description: Read-only reviewer. Use after a task's changes are finished and before committing (commits auto-merge once CI passes, so this is the last check before main). Checks the current branch's changes against every rule in CLAUDE.md and docs/task-list.md, and reports violations. Never edits files.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---

@@ -15,8 +15,9 @@ This project is for learning. Every step we take gets written up in `docs/learni
 `docs/task-list.md` is the source of truth for tasks and branch names.
 
 - **Before planning or creating a branch,** read `docs/task-list.md`. Take the next ❌ task, or the task the developer names. Use its `Branch` column exactly as the branch name, and base the plan on its `What` and `Tests` columns.
+- **If the next ❌ task is waiting on the developer** (a decision, credentials, or an input listed under Blockers), ask for it, then continue with the next ❌ task that isn't blocked.
 - **New work goes into the list first.** If a task isn't in the list, add it as a new ❌ row with the next number, and get the developer's OK before creating its branch.
-- **Status marks:** ❌ = not done, ✅ = done. When the task's changes are finished and the end-of-task checklist passes, change its ❌ to ✅ in the task's own branch **before** asking to commit, so the tick is part of that commit.
+- **Status marks:** ❌ = not done, ✅ = done. When the task's changes are finished and the end-of-task checklist passes, change its ❌ to ✅ in the task's own branch **before** committing, so the tick is part of that commit.
 - Never mark ✅ if tests, lint, type-check, or build fail. Never tick a task other than the current one.
 
 # Branch and commit rules (always follow, never skip)
@@ -27,7 +28,7 @@ This project is for learning. Every step we take gets written up in `docs/learni
   - `02_adding_rules_for_learning_document`
   - `03_adding_rules_for_creating_branch`
 - Take the branch name from `docs/task-list.md` (see the task list rule). Don't invent names outside the list.
-- **Never commit, push, merge, or open a PR without the developer's explicit permission.** Make the changes, show them for review, then wait. Permission for one commit doesn't carry over to the next.
+- **Commit, publish, and PR are part of every task** (the developer chose full auto-merge on 2026-09-26). Commit only after the end-of-task checklist passes and the rules-reviewer returns `READY TO COMMIT`. See Merge flow below.
 - **Commit message format:** `<branch_name> <commit_message>`, with a short, clear message in the imperative mood. For example:
   - `03_adding_rules_for_creating_branch Add branch and commit rules to CLAUDE.md`
 
@@ -40,7 +41,7 @@ This project is for learning. Every step we take gets written up in `docs/learni
   - E2E tests (Playwright) cover `async` Server Components and user flows. Vitest can't render async Server Components.
 - **Mock external services** in unit tests: the HF/Gradio try-on model, Cloudinary, Clerk, MongoDB, and Inngest. Unit tests must never call a real service or use real keys.
 - Cover the happy path plus the important failures (bad input, a service error, auth missing), and keep tests short.
-- Run the tests before asking to commit, and report the result honestly. Include failures with their output.
+- Run the tests before committing, and report the result honestly. Include failures with their output.
 - Put the test commands, with their **Why:** lines, in that task's learning doc.
 - The test framework isn't installed yet. Setting it up (Vitest + Testing Library, and Playwright) is its own task and branch, done before the first feature.
 
@@ -58,22 +59,26 @@ This project is for learning. Every step we take gets written up in `docs/learni
 
 # Workflow (always follow, never skip)
 
-- **Plan first.** Before coding a task, give a short plan: the files to change, the commands to run, and the tests to add. Wait for the developer's OK.
+- **Plan first.** Before coding a task, write a short plan (the files to change, the commands to run, the tests to add) and share it, then go ahead. **Stop and wait for the developer only when the task needs them:** a product decision, credentials or keys, a package not already named in `docs/task-list.md`, a repo setting or action Claude is blocked from, or anything unclear.
 - **Stay in scope.** Change only what the current task needs. No refactors or "improvements" elsewhere; suggest them separately as future tasks.
 - **Ask when unsure.** If a requirement or product decision is unclear, ask instead of guessing.
 - **Explain as you go.** This is a learning project, so after each change briefly say *why*, not just *what*.
-- **Ask before adding any package.** Say what it's for and its version before installing. Record it in the task's learning doc.
-- **End-of-task checklist.** Before asking to commit:
+- **Packages:** a package named with its version in `docs/task-list.md` is pre-approved. Ask before adding any other package, saying what it's for and its version. Record every package in the task's learning doc.
+- **End-of-task checklist.** Before committing:
   - Tests pass: `npm test` (Vitest) and `npm run test:e2e` (Playwright).
   - `npm run lint` passes.
   - `npm run typecheck` passes (runs `next typegen && tsc --noEmit`).
   - `npm run build` passes.
   - The learning doc is updated.
-  - A short summary of the changes is given for review.
+  - The rules-reviewer returns `READY TO COMMIT`.
+  - A short summary of the changes goes in the PR description.
   - Report any failure honestly, with its output.
 
 # Git extras (always follow, never skip)
 
-- **Branch base.** Each new task branch starts from the latest approved branch (or from `main` once merges start), never from an unapproved one, unless the developer says otherwise.
+- **Branch base.** Each new task branch starts from the latest `main` (after `git fetch origin` and a fast-forward), unless the developer says otherwise.
 - **No destructive git.** No force-push, `reset --hard`, rebasing or amending pushed commits, or deleting branches without the developer's explicit permission.
-- **Merge flow.** Claude never merges into `main`. After approval, Claude pushes the branch and opens a PR only when asked, and the developer reviews and merges it.
+- **Merge flow (auto-merge).** After committing, Claude publishes the task branch, opens a PR into `main`, and enables GitHub auto-merge: `gh pr merge <number> --auto --merge`. GitHub merges it **only** once the required CI check passes (branch protection on `main`).
+  - Claude never merges directly, never bypasses or disables checks, and never changes branch protection.
+  - If CI fails, fix it on the same branch (use `systematic-debugging`), and auto-merge completes when CI turns green.
+  - After the merge, update local `main` and start the next ❌ task.
