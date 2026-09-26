@@ -30,25 +30,26 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 11 | `11_setup_vitest` | Vitest 5 + Testing Library + jest-dom, `vitest.config.mts` (Vite 8 built-in `@/` paths), `npm test` / `npm run test:watch`; `@types/node` 20 → 22 and `engines` tightened for jsdom 30 | Sample `app/page.test.tsx` passes; planted failure is reported |
 | ✅ | 12 | `12_setup_playwright` | `@playwright/test` 1.63.0 (Chromium only), `playwright.config.ts` (prod build on port 3100), `e2e/` folder, `npm run test:e2e`; checklist and reviewer run it | Smoke test: home page loads; planted failure is reported |
 | ✅ | 13 | `13_add_ci_workflow` | GitHub Actions `.github/workflows/ci.yml`: Node from `.nvmrc`, `npm ci`, lint, `npm run typecheck`, `npm test`, Playwright Chromium + `npm run test:e2e` (includes build), on every PR and every update to `main` | Workflow runs green on its PR; a planted failing test turns it red |
+| ✅ | 14 | `14_add_branch_protection` | Branch protection on `main`: the CI check must pass, the PR branch must be up to date, rules apply to admins too, no force updates or deletion of `main`, no required reviews (solo developer) | Settings read back via `gh api`; a PR with a failing test shows merging blocked |
 
 ## Group C: Phase 1 foundation
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 14 | `14_add_project_plan_doc` | Add the project plan (incl. `Product` / `TryOn` fields) to `docs/` | None (docs) |
-| ❌ | 15 | `15_replace_boilerplate_page` | Replace the starter page and metadata | Page unit test, and update the e2e smoke test |
-| ❌ | 16 | `16_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
-| ❌ | 17 | `17_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` | None (no code) |
-| ❌ | 18 | `18_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, init for MongoDB | `prisma validate` passes |
-| ❌ | 19 | `19_add_prisma_schema` | `Product` and `TryOn` models from the plan | `prisma validate` + `prisma generate` |
-| ❌ | 20 | `20_add_prisma_client_lib` | `lib/prisma.ts` singleton | Same instance returned (mocked) |
-| ❌ | 21 | `21_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
-| ❌ | 22 | `22_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
-| ❌ | 23 | `23_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
-| ❌ | 24 | `24_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts` upload helper | Upload success and failure (SDK mocked) |
-| ❌ | 25 | `25_decide_tryon_model` | Record the model choice (OOTDiffusion / self-host / wait) in docs | None (decision) |
-| ❌ | 26 | `26_install_gradio_client` | `@gradio/client@2.7.0` | Import works in a server-only test |
-| ❌ | 27 | `27_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
+| ❌ | 15 | `15_add_project_plan_doc` | Add the project plan (incl. `Product` / `TryOn` fields) to `docs/` | None (docs) |
+| ❌ | 16 | `16_replace_boilerplate_page` | Replace the starter page and metadata | Page unit test, and update the e2e smoke test |
+| ❌ | 17 | `17_update_readme` | Replace the `create-next-app` README with a project README | None (docs) |
+| ❌ | 18 | `18_add_env_example` | `.env.example`: `DATABASE_URL`, Clerk keys, `CLOUDINARY_*`, `HF_TOKEN`, `INNGEST_*` | None (no code) |
+| ❌ | 19 | `19_install_prisma_6` | `prisma@6.19.3` + `@prisma/client@6.19.3`, init for MongoDB | `prisma validate` passes |
+| ❌ | 20 | `20_add_prisma_schema` | `Product` and `TryOn` models from the plan | `prisma validate` + `prisma generate` |
+| ❌ | 21 | `21_add_prisma_client_lib` | `lib/prisma.ts` singleton | Same instance returned (mocked) |
+| ❌ | 22 | `22_setup_clerk_auth` | `@clerk/nextjs@7.9.7`, provider in the layout | Layout renders with Clerk mocked |
+| ❌ | 23 | `23_add_clerk_proxy` | `proxy.ts` protecting routes (Next 16's replacement for middleware) | E2E: a protected route redirects when signed out |
+| ❌ | 24 | `24_add_clerk_sign_in_pages` | Sign-in and sign-up pages | E2E: both pages render |
+| ❌ | 25 | `25_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts` upload helper | Upload success and failure (SDK mocked) |
+| ❌ | 26 | `26_decide_tryon_model` | Record the model choice (OOTDiffusion / self-host / wait) in docs | None (decision) |
+| ❌ | 27 | `27_install_gradio_client` | `@gradio/client@2.7.0` | Import works in a server-only test |
+| ❌ | 28 | `28_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
 
 ## Blockers
 
@@ -58,9 +59,9 @@ Each task is one branch. The branch name is the `Branch` column exactly.
   - Installing the guardrail hook changes `.claude/settings.json`, so the developer must approve that step.
   - `skill-creator` may already be available here as `anthropic-skills:skill-creator`.
 - **08:** creating `.claude/agents/rules-reviewer.md` needs the developer's approval.
-- **14:** needs the plan from the developer. It blocks 19.
-- **18–24:** need a MongoDB Atlas URL, Clerk keys, and Cloudinary credentials in the developer's local `.env`, never in chat or commits.
-- **26–27:** need the decision from 25.
+- **15:** needs the plan from the developer. It blocks 20.
+- **19–25:** need a MongoDB Atlas URL, Clerk keys, and Cloudinary credentials in the developer's local `.env`, never in chat or commits.
+- **27–28:** need the decision from 26.
 
 ## Later (Phase 3+, not yet split into tasks)
 
