@@ -64,7 +64,7 @@ This project is for learning. Every step we take gets written up in `docs/learni
 - **Explain as you go.** This is a learning project, so after each change briefly say *why*, not just *what*.
 - **Ask before adding any package.** Say what it's for and its version before installing. Record it in the task's learning doc.
 - **End-of-task checklist.** Before asking to commit:
-  - Tests pass.
+  - Tests pass: `npm test` (Vitest) and `npm run test:e2e` (Playwright).
   - `npm run lint` passes.
   - `npm run typecheck` passes (runs `next typegen && tsc --noEmit`).
   - `npm run build` passes.
