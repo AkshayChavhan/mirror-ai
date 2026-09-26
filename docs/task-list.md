@@ -27,7 +27,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 |---|---|---|---|---|
 | ✅ | 09 | `09_pin_node_version` | `.nvmrc` (`22.23.2`) and `engines` in `package.json` | None (config) |
 | ✅ | 10 | `10_add_typecheck_script` | `"typecheck": "next typegen && tsc --noEmit"` in `package.json`; point the `CLAUDE.md` checklist and `rules-reviewer` at it | `npm run typecheck` passes |
-| ❌ | 11 | `11_setup_vitest` | Vitest + Testing Library, `npm test` script | One sample test passes |
+| ✅ | 11 | `11_setup_vitest` | Vitest 5 + Testing Library + jest-dom, `vitest.config.mts` (Vite 8 built-in `@/` paths), `npm test` / `npm run test:watch`; `@types/node` 20 → 22 and `engines` tightened for jsdom 30 | Sample `app/page.test.tsx` passes; planted failure is reported |
 | ❌ | 12 | `12_setup_playwright` | Playwright, `e2e/` folder | Smoke test: home page loads |
 | ❌ | 13 | `13_add_ci_workflow` | GitHub Actions: lint, typecheck, test, build on every PR | Workflow runs green on a PR |
 
