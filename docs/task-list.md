@@ -50,7 +50,7 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 26 | `26_add_cloudinary_client` | `cloudinary@2.11.0`, `lib/cloudinary.ts`: `uploadImage()` with friendly `ImageUploadError`s and server-side logging | `lib/cloudinary.test.ts` (SDK mocked): success, empty file, missing env, provider error hidden from users |
 | ✅ | 27 | `27_decide_tryon_model` | Chose **OOTDiffusion** (`levihsu/OOTDiffusion`, `/process_dc`); verified status and API; recorded params, return shape, and risks (non-commercial license, shared ZeroGPU quota) in `docs/project-plan.md` | None (decision) |
 | ✅ | 28 | `28_install_gradio_client` | `@gradio/client@2.7.0`; one-off read-only `view_api()` check against the OOTDiffusion Space | `lib/gradio-client.test.ts` (Node env): `Client.connect` and `handle_file` load |
-| ❌ | 29 | `29_add_tryon_model_client` | `lib/tryon.ts` with `runTryOn()`: maps `UPPER`/`LOWER`/`OVERALL`; handles timeout, quota, and bad input | Category mapping and each error path (Gradio mocked) |
+| ✅ | 29 | `29_add_tryon_model_client` | `lib/tryon.ts`: `runTryOn()` on OOTDiffusion `/process_dc` (both images always passed, first image result), `UPPER`/`LOWER`/`OVERALL` mapping, `TryOnError` codes for bad input, unavailable, quota, timeout, no result, failed | `lib/tryon.test.ts` (Gradio mocked): mapping, each category, every error path |
 
 ## Blockers
 
