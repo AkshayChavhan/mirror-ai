@@ -10,10 +10,11 @@ on:
 permissions:
   contents: read
 
-# A new push to the same PR cancels the run still in progress.
+# A new commit on the same PR cancels the run still in progress.
+# Runs on main are never cancelled, so every merge gets a finished check.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
@@ -55,4 +56,6 @@ jobs:
         with:
           name: playwright-test-results
           path: test-results/
+          # If an earlier step failed, E2E never ran and there is nothing to upload.
+          if-no-files-found: ignore
           retention-days: 7
