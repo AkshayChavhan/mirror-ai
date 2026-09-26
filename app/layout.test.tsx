@@ -42,6 +42,17 @@ describe("RootLayout", () => {
     expect(provider.props.children).toBe(page);
   });
 
+  it("points Clerk at our sign-in/sign-up pages and redirects home afterwards", () => {
+    const body = renderLayout(null).props.children as Element;
+    const provider = body.props.children as ReactElement<Record<string, unknown>>;
+    expect(provider.props).toMatchObject({
+      signInUrl: "/sign-in",
+      signUpUrl: "/sign-up",
+      signInFallbackRedirectUrl: "/",
+      signUpFallbackRedirectUrl: "/",
+    });
+  });
+
   it("keeps the Mirror AI metadata", () => {
     expect(metadata.title).toBe("Mirror AI");
   });
