@@ -1,4 +1,5 @@
 import type { Product } from "@prisma/client";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { ProductError, listAllProducts } from "@/lib/products";
 
@@ -36,7 +37,12 @@ export default async function AdminProductsPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-12">
-      <h1 className="text-2xl font-semibold">Products</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Products</h1>
+        <Link href="/admin/products/new" className="rounded bg-black px-4 py-2 text-sm text-white">
+          New product
+        </Link>
+      </div>
       {products.length === 0 ? (
         <p className="mt-6 text-zinc-600">No products yet.</p>
       ) : (
@@ -47,6 +53,9 @@ export default async function AdminProductsPage() {
               <th scope="col" className="py-2">Category</th>
               <th scope="col" className="py-2">Price</th>
               <th scope="col" className="py-2">Status</th>
+              <th scope="col" className="py-2">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -56,6 +65,15 @@ export default async function AdminProductsPage() {
                 <td className="py-2">{CATEGORY_LABEL[product.category]}</td>
                 <td className="py-2">{formatPrice(product.price)}</td>
                 <td className="py-2">{product.isActive ? "Visible" : "Hidden"}</td>
+                <td className="py-2">
+                  <Link
+                    href={`/admin/products/${product.id}/edit`}
+                    aria-label={`Edit ${product.name}`}
+                    className="underline"
+                  >
+                    Edit
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

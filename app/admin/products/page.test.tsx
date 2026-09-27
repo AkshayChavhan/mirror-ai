@@ -60,13 +60,20 @@ describe("/admin/products", () => {
       "Top",
       "$29.99",
       "Visible",
+      "Edit",
     ]);
     expect(within(rows[1]).getAllByRole("cell").map((c) => c.textContent)).toEqual([
       "Denim Skirt",
       "Bottom",
       "—",
       "Hidden",
+      "Edit",
     ]);
+    expect(screen.getByRole("link", { name: "Edit Linen Shirt" })).toHaveAttribute(
+      "href",
+      "/admin/products/65f0c0ffee0000000000abcd/edit",
+    );
+    expect(screen.getByRole("link", { name: "New product" })).toHaveAttribute("href", "/admin/products/new");
   });
 
   it("shows an empty state", async () => {
