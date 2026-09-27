@@ -62,7 +62,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 |---|---|---|---|---|
 | ❌ | 30 | `30_add_db_push_script` | `npm run db:push` (`prisma db push`) to create the MongoDB collections and indexes from the schema | Script runs against the developer's Atlas database |
 | ✅ | 31 | `31_add_product_queries` | `lib/products.ts`: list active, get one, create, update, delete | Unit (Prisma mocked) |
-| ❌ | 32 | `32_add_admin_products_list` | `/admin/products` list page (`requireAdmin`) | Unit + E2E: signed-out redirect, non-admin 404 |
+| ✅ | 32 | `32_add_admin_products_list` | `/admin/products` list page (`requireAdmin`) | Unit + E2E: signed-out redirect, non-admin 404 |
 | ❌ | 33 | `33_add_admin_product_form` | Create/edit product form, with garment image upload to Cloudinary | Unit + E2E |
 | ❌ | 34 | `34_add_admin_product_delete` | Delete, and hide/show (`isActive`) | Unit + E2E |
 | ❌ | 35 | `35_add_landing_page` | Landing page: public product grid and a "Try it on" button (replaces the temporary home) | Unit + E2E |
