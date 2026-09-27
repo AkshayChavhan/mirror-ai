@@ -6,7 +6,7 @@ This is also a **learning project**. Every step is written up in [`docs/learning
 
 ## Status
 
-Early setup. Tooling, tests, and CI are in place. The app itself (database, auth, uploads, try-on model) is being built task by task. See [`docs/task-list.md`](docs/task-list.md).
+In progress. Done: tooling, tests, CI, auth, the landing page with its product grid, and the admin products panel. Next: the try-on flow, history, wishlist, and privacy cleanup. See [`docs/task-list.md`](docs/task-list.md).
 
 ## Stack
 

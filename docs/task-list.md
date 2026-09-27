@@ -65,7 +65,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ✅ | 32 | `32_add_admin_products_list` | `/admin/products` list page (`requireAdmin`) | Unit + E2E: signed-out redirect, non-admin 404 |
 | ✅ | 33 | `33_add_admin_product_form` | Create/edit product form, with garment image upload to Cloudinary | Unit + E2E |
 | ✅ | 34 | `34_add_admin_product_delete` | Delete, and hide/show (`isActive`) | Unit + E2E |
-| ❌ | 35 | `35_add_landing_page` | Landing page: public product grid and a "Try it on" button (replaces the temporary home) | Unit + E2E |
+| ✅ | 35 | `35_add_landing_page` | Landing page: public product grid and a "Try it on" button (replaces the temporary home) | Unit + E2E |
 
 ### Group E: Try-on flow
 
