@@ -16,7 +16,7 @@ In progress. Done: tooling, tests, CI, auth, the landing page with its product g
 | Styling | Tailwind CSS 4 | |
 | Tests | Vitest + Testing Library (unit), Playwright (E2E) | |
 | CI | GitHub Actions | |
-| Database | Prisma 6 with MongoDB models `Product`, `TryOn`, `WishlistItem` (`prisma/schema.prisma`) | A live MongoDB connection |
+| Database | Prisma 6 with MongoDB models `Product`, `TryOn`, `WishlistItem` (`prisma/schema.prisma`), on MongoDB Atlas. Collections and indexes are created with `npm run db:push` | |
 | Auth | Clerk (`@clerk/nextjs` 7): `<ClerkProvider>`, `/sign-in` and `/sign-up`, `proxy.ts` (Clerk middleware), `requireUser()` / `requireAdmin()` in `lib/auth.ts` | Using them on the protected pages as they're built |
 | Images | Cloudinary upload helper (`lib/cloudinary.ts`) | Wiring it into upload forms |
 | Try-on model | **OOTDiffusion** Hugging Face Space via `runTryOn()` in `lib/tryon.ts` (see [`docs/project-plan.md`](docs/project-plan.md#try-on-model-decided-2026-09-26-task-27)). Non-commercial license | Background job (Inngest) and UI |
@@ -55,6 +55,7 @@ npx playwright install chromium
 | `npm test` | Vitest unit tests, run once |
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run test:e2e` | Playwright E2E tests against a production build on port 3100 |
+| `npm run db:push` | Create or update the MongoDB collections and indexes from `prisma/schema.prisma` (needs `DATABASE_URL` in `.env`) |
 
 ## How work happens
 
