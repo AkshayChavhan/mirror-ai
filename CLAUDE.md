@@ -43,7 +43,7 @@ This project is for learning. Every step we take gets written up in `docs/learni
 - Cover the happy path plus the important failures (bad input, a service error, auth missing), and keep tests short.
 - Run the tests before committing, and report the result honestly. Include failures with their output.
 - Put the test commands, with their **Why:** lines, in that task's learning doc.
-- The test framework isn't installed yet. Setting it up (Vitest + Testing Library, and Playwright) is its own task and branch, done before the first feature.
+- Commands: `npm test` (Vitest, runs once), `npm run test:watch`, `npm run test:e2e` (Playwright, builds and serves the app on port 3100).
 
 # Code rules
 
