@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the Cloudinary SDK: unit tests never call the real service or use real keys.
-const { upload, config } = vi.hoisted(() => ({ upload: vi.fn(), config: vi.fn() }));
-vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload } } }));
+const { upload, destroy, config } = vi.hoisted(() => ({ upload: vi.fn(), destroy: vi.fn(), config: vi.fn() }));
+vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload, destroy } } }));
 
-import { ImageUploadError, uploadImage } from "./cloudinary";
+import { ImageUploadError, deleteImage, uploadImage } from "./cloudinary";
 
 const FILE = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -43,6 +43,16 @@ describe("uploadImage", () => {
     );
   });
 
+  it("with stripMetadata, strips EXIF/GPS before the image is stored", async () => {
+    upload.mockResolvedValue({ secure_url: "https://x", public_id: "mirror-ai/people/me", width: 1, height: 1 });
+    await uploadImage(FILE, "mirror-ai/people", { stripMetadata: true });
+    expect(upload).toHaveBeenCalledWith(FILE, {
+      folder: "mirror-ai/people",
+      resource_type: "image",
+      transformation: [{ flags: "force_strip" }],
+    });
+  });
+
   it.each(["", "   "])("rejects an empty file (%j) with a friendly message, without calling Cloudinary", async (file) => {
     await expect(uploadImage(file, "mirror-ai/garments")).rejects.toThrow("Please choose an image to upload.");
     expect(upload).not.toHaveBeenCalled();
@@ -68,5 +78,58 @@ describe("uploadImage", () => {
     expect((error as ImageUploadError).message).not.toContain("Signature");
     expect((error as ImageUploadError).cause).toBe(providerError);
     expect(console.error).toHaveBeenCalledWith("[cloudinary] Upload failed:", providerError);
+  });
+});
+
+describe("deleteImage", () => {
+  const PUBLIC_ID = "mirror-ai/people/abc";
+
+  beforeEach(() => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "<test-cloud>");
+    vi.stubEnv("CLOUDINARY_API_KEY", "<test-key>");
+    vi.stubEnv("CLOUDINARY_API_SECRET", "<test-secret>");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    destroy.mockReset();
+    config.mockReset();
+  });
+
+  it("deletes the image and clears it from the CDN cache", async () => {
+    destroy.mockResolvedValue({ result: "ok" });
+    await expect(deleteImage(PUBLIC_ID)).resolves.toBe(true);
+    expect(destroy).toHaveBeenCalledWith(PUBLIC_ID, { resource_type: "image", invalidate: true });
+  });
+
+  it("counts an image that is already gone as deleted", async () => {
+    destroy.mockResolvedValue({ result: "not found" });
+    await expect(deleteImage(PUBLIC_ID)).resolves.toBe(true);
+  });
+
+  it("returns false and logs when Cloudinary reports another result", async () => {
+    destroy.mockResolvedValue({ result: "error" });
+    await expect(deleteImage(PUBLIC_ID)).resolves.toBe(false);
+    expect(console.error).toHaveBeenCalledWith(`[cloudinary] Delete of ${PUBLIC_ID} returned:`, { result: "error" });
+  });
+
+  it("never throws: returns false and logs when the call fails", async () => {
+    const providerError = { message: "Invalid Signature 3f9a...", http_code: 401 };
+    destroy.mockRejectedValue(providerError);
+    await expect(deleteImage(PUBLIC_ID)).resolves.toBe(false);
+    expect(console.error).toHaveBeenCalledWith(`[cloudinary] Delete of ${PUBLIC_ID} failed:`, providerError);
+  });
+
+  it("returns false without calling Cloudinary when env vars are missing", async () => {
+    vi.stubEnv("CLOUDINARY_API_KEY", "");
+    await expect(deleteImage(PUBLIC_ID)).resolves.toBe(false);
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
+  it("returns false for an empty public id", async () => {
+    await expect(deleteImage("  ")).resolves.toBe(false);
+    expect(destroy).not.toHaveBeenCalled();
   });
 });
