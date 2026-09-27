@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { ImageUploadError, uploadImage } from "@/lib/cloudinary";
-import { ProductError, createProduct, updateProduct, validateProductInput, type ProductInput } from "@/lib/products";
+import {
+  ProductError,
+  createProduct,
+  deleteProduct,
+  updateProduct,
+  validateProductInput,
+  type ProductInput,
+} from "@/lib/products";
 
 // Server Actions for the admin product form. Per the Next 16 guide, every action authenticates and
 // validates on its own: rendering the form only on an admin page is not a security boundary.
@@ -16,6 +23,13 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const GARMENT_FOLDER = "mirror-ai/garments";
 
 class FormError extends Error {}
+
+/** A bound id comes back from the browser: check its type AND ObjectId format before using it. */
+function assertBoundId(id: unknown): asserts id is string {
+  if (typeof id !== "string" || !/^[a-f0-9]{24}$/i.test(id)) {
+    throw new ProductError("NOT_FOUND", "That product doesn't exist.");
+  }
+}
 
 function field(formData: FormData, name: string): string | null {
   const value = formData.get(name);
@@ -83,11 +97,7 @@ export async function updateProductAction(
 ): Promise<ProductFormState> {
   await requireAdmin();
   try {
-    // The bound id comes back from the browser: don't trust its type.
-    // Type AND format are checked before any upload, so a bad id can't leave an orphan image.
-    if (typeof id !== "string" || !/^[a-f0-9]{24}$/i.test(id)) {
-      throw new ProductError("NOT_FOUND", "That product doesn't exist.");
-    }
+    assertBoundId(id); // before any upload, so a bad id can't leave an orphan image
     const fields = readFields(formData);
     validateProductInput(fields, true); // check fields first, so a typo doesn't leave an orphan image in Cloudinary
     const imageUrl = await uploadChosenImage(formData, false);
@@ -97,4 +107,31 @@ export async function updateProductAction(
   }
   revalidatePath("/admin/products");
   redirect("/admin/products");
+}
+
+/** Permanently deletes a product (its try-ons and wishlist items cascade). Admin only. */
+export async function deleteProductAction(id: string): Promise<ProductFormState> {
+  await requireAdmin();
+  try {
+    assertBoundId(id);
+    await deleteProduct(id);
+  } catch (error) {
+    return toFormState(error);
+  }
+  revalidatePath("/admin/products");
+  return { error: null };
+}
+
+/** Hides (false) or shows (true) a product to shoppers without deleting it. Admin only. */
+export async function setProductActiveAction(id: string, isActive: boolean): Promise<ProductFormState> {
+  await requireAdmin();
+  try {
+    assertBoundId(id);
+    if (typeof isActive !== "boolean") throw new FormError("Please choose whether the product is visible.");
+    await updateProduct(id, { isActive });
+  } catch (error) {
+    return toFormState(error);
+  }
+  revalidatePath("/admin/products");
+  return { error: null };
 }
