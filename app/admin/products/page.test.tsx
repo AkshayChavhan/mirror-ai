@@ -12,6 +12,13 @@ vi.mock("@/lib/products", async () => {
   return { ProductError: actual.ProductError, listAllProducts };
 });
 
+// The row buttons are tested in ProductRowActions.test.tsx; here we only check they're placed per row.
+vi.mock("./ProductRowActions", () => ({
+  default: ({ name, isActive }: { name: string; isActive: boolean }) => (
+    <span data-testid="row-actions">{`${name}:${isActive ? "visible" : "hidden"}`}</span>
+  ),
+}));
+
 import { ProductError } from "@/lib/products";
 import AdminProductsPage from "./page";
 
@@ -60,14 +67,14 @@ describe("/admin/products", () => {
       "Top",
       "$29.99",
       "Visible",
-      "Edit",
+      "EditLinen Shirt:visible",
     ]);
     expect(within(rows[1]).getAllByRole("cell").map((c) => c.textContent)).toEqual([
       "Denim Skirt",
       "Bottom",
       "—",
       "Hidden",
-      "Edit",
+      "EditDenim Skirt:hidden",
     ]);
     expect(screen.getByRole("link", { name: "Edit Linen Shirt" })).toHaveAttribute(
       "href",

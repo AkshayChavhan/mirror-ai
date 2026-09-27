@@ -2,6 +2,7 @@ import type { Product } from "@prisma/client";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { ProductError, listAllProducts } from "@/lib/products";
+import ProductRowActions from "./ProductRowActions";
 
 export const metadata = { title: "Products · Admin · Mirror AI" };
 
@@ -66,13 +67,16 @@ export default async function AdminProductsPage() {
                 <td className="py-2">{formatPrice(product.price)}</td>
                 <td className="py-2">{product.isActive ? "Visible" : "Hidden"}</td>
                 <td className="py-2">
-                  <Link
-                    href={`/admin/products/${product.id}/edit`}
-                    aria-label={`Edit ${product.name}`}
-                    className="underline"
-                  >
-                    Edit
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/admin/products/${product.id}/edit`}
+                      aria-label={`Edit ${product.name}`}
+                      className="underline"
+                    >
+                      Edit
+                    </Link>
+                    <ProductRowActions id={product.id} name={product.name} isActive={product.isActive} />
+                  </div>
                 </td>
               </tr>
             ))}

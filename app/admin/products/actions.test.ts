@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   uploadImage: vi.fn(),
   createProduct: vi.fn(),
   updateProduct: vi.fn(),
+  deleteProduct: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
@@ -26,12 +27,18 @@ vi.mock("@/lib/products", async () => {
     validateProductInput: actual.validateProductInput, // real validation, so field checks are tested
     createProduct: m.createProduct,
     updateProduct: m.updateProduct,
+    deleteProduct: m.deleteProduct,
   };
 });
 
 import { ImageUploadError } from "@/lib/cloudinary";
 import { ProductError } from "@/lib/products";
-import { createProductAction, updateProductAction } from "./actions";
+import {
+  createProductAction,
+  deleteProductAction,
+  setProductActiveAction,
+  updateProductAction,
+} from "./actions";
 
 const ID = "65f0c0ffee0000000000abcd";
 const UPLOADED = "https://res.cloudinary.com/demo/image/upload/mirror-ai/garments/abc.png";
@@ -179,6 +186,64 @@ describe("admin product actions", () => {
       await expect(updateProductAction(ID, EMPTY, form({ image: null }))).resolves.toEqual({
         error: "That product doesn't exist.",
       });
+    });
+  });
+
+  describe("deleteProductAction", () => {
+    it("checks admin access before deleting", async () => {
+      m.requireAdmin.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+      await expect(deleteProductAction(ID)).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(m.deleteProduct).not.toHaveBeenCalled();
+    });
+
+    it("deletes and refreshes the list", async () => {
+      m.deleteProduct.mockResolvedValue(undefined);
+      await expect(deleteProductAction(ID)).resolves.toEqual({ error: null });
+      expect(m.deleteProduct).toHaveBeenCalledWith(ID);
+      expect(m.revalidatePath).toHaveBeenCalledWith("/admin/products");
+    });
+
+    it("rejects a malformed id without touching the database", async () => {
+      await expect(deleteProductAction("bad")).resolves.toEqual({ error: "That product doesn't exist." });
+      expect(m.deleteProduct).not.toHaveBeenCalled();
+    });
+
+    it("shows NOT_FOUND for an already-deleted product", async () => {
+      m.deleteProduct.mockRejectedValue(new ProductError("NOT_FOUND", "That product doesn't exist."));
+      await expect(deleteProductAction(ID)).resolves.toEqual({ error: "That product doesn't exist." });
+    });
+  });
+
+  describe("setProductActiveAction", () => {
+    it("checks admin access before changing visibility", async () => {
+      m.requireAdmin.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
+      await expect(setProductActiveAction(ID, false)).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(m.updateProduct).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])("sets isActive to %s and refreshes the list", async (isActive) => {
+      await expect(setProductActiveAction(ID, isActive)).resolves.toEqual({ error: null });
+      expect(m.updateProduct).toHaveBeenCalledWith(ID, { isActive });
+      expect(m.revalidatePath).toHaveBeenCalledWith("/admin/products");
+    });
+
+    it("rejects a non-boolean value sent from the browser", async () => {
+      const state = await setProductActiveAction(ID, "false" as unknown as boolean);
+      expect(state.error).toContain("visible");
+      expect(m.updateProduct).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed id", async () => {
+      await expect(setProductActiveAction("bad", true)).resolves.toEqual({ error: "That product doesn't exist." });
+      expect(m.updateProduct).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["NOT_FOUND (deleted in another tab)", new ProductError("NOT_FOUND", "That product doesn't exist.")],
+      ["DB_ERROR", new ProductError("DB_ERROR", "Something went wrong with the products. Please try again.")],
+    ])("shows %s from the database", async (_label, dbError) => {
+      m.updateProduct.mockRejectedValue(dbError);
+      await expect(setProductActiveAction(ID, false)).resolves.toEqual({ error: dbError.message });
     });
   });
 });
