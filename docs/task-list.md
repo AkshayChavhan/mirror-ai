@@ -71,7 +71,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 36 | `36_install_inngest` | `inngest@4.21.0` and its client | Client loads (unit) |
+| ✅ | 36 | `36_install_inngest` | `inngest@4.21.0` and its client | Client loads (unit) |
 | ❌ | 37 | `37_add_inngest_route` | `app/api/inngest` route (local Inngest dev server) | Unit + route responds |
 | ❌ | 38 | `38_add_tryon_create_action` | "Try on" action: `requireUser`, upload the person photo, create a `PENDING` try-on, send the job event | Unit (mocks) |
 | ❌ | 39 | `39_add_tryon_job` | Job: `PROCESSING` → `runTryOn()` → result to Cloudinary → `DONE` / `FAILED` | Unit (mocks), every path |
