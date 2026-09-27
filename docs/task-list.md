@@ -52,20 +52,70 @@ Each task is one branch. The branch name is the `Branch` column exactly.
 | ✅ | 28 | `28_install_gradio_client` | `@gradio/client@2.7.0`; one-off read-only `view_api()` check against the OOTDiffusion Space | `lib/gradio-client.test.ts` (Node env): `Client.connect` and `handle_file` load |
 | ✅ | 29 | `29_add_tryon_model_client` | `lib/tryon.ts`: `runTryOn()` on OOTDiffusion `/process_dc` (both images always passed, first image result), `UPPER`/`LOWER`/`OVERALL` mapping, `TryOnError` codes for bad input, unavailable, quota, timeout, no result, failed | `lib/tryon.test.ts` (Gradio mocked): mapping, each category, every error path |
 
+## Phase 2 (approved by the developer on 2026-09-27)
+
+Built from `docs/project-plan.md`. Every page task includes its unit and E2E tests. Protected pages call `requireUser()` / `requireAdmin()` and have a signed-out redirect E2E test.
+
+### Group D: Database and admin
+
+| Status | # | Branch | What | Tests |
+|---|---|---|---|---|
+| ❌ | 30 | `30_add_db_push_script` | `npm run db:push` (`prisma db push`) to create the MongoDB collections and indexes from the schema | Script runs against the developer's Atlas database |
+| ❌ | 31 | `31_add_product_queries` | `lib/products.ts`: list active, get one, create, update, delete | Unit (Prisma mocked) |
+| ❌ | 32 | `32_add_admin_products_list` | `/admin/products` list page (`requireAdmin`) | Unit + E2E: signed-out redirect, non-admin 404 |
+| ❌ | 33 | `33_add_admin_product_form` | Create/edit product form, with garment image upload to Cloudinary | Unit + E2E |
+| ❌ | 34 | `34_add_admin_product_delete` | Delete, and hide/show (`isActive`) | Unit + E2E |
+| ❌ | 35 | `35_add_landing_page` | Landing page: public product grid and a "Try it on" button (replaces the temporary home) | Unit + E2E |
+
+### Group E: Try-on flow
+
+| Status | # | Branch | What | Tests |
+|---|---|---|---|---|
+| ❌ | 36 | `36_install_inngest` | `inngest@4.21.0` and its client | Client loads (unit) |
+| ❌ | 37 | `37_add_inngest_route` | `app/api/inngest` route (local Inngest dev server) | Unit + route responds |
+| ❌ | 38 | `38_add_tryon_create_action` | "Try on" action: `requireUser`, upload the person photo, create a `PENDING` try-on, send the job event | Unit (mocks) |
+| ❌ | 39 | `39_add_tryon_job` | Job: `PROCESSING` → `runTryOn()` → result to Cloudinary → `DONE` / `FAILED` | Unit (mocks), every path |
+| ❌ | 40 | `40_add_tryon_status_endpoint` | Status endpoint for polling | Unit + E2E |
+| ❌ | 41 | `41_add_tryon_page_upload` | `/tryon`: product carousel, gallery upload, preview (Retake / Try on) | Unit + E2E incl. signed-out redirect |
+| ❌ | 42 | `42_add_tryon_camera` | Live camera capture with a pose guide overlay | Unit + E2E (fake camera) |
+| ❌ | 43 | `43_add_tryon_loading_screen` | Loading screen that polls until the try-on is done or has failed | Unit + E2E |
+| ❌ | 44 | `44_add_tryon_result_page` | `/tryon/[id]` (public link): before/after slider, download | Unit + E2E |
+| ❌ | 45 | `45_add_whatsapp_share` | Share-to-WhatsApp button | Unit + E2E |
+
+### Group F: History and wishlist
+
+| Status | # | Branch | What | Tests |
+|---|---|---|---|---|
+| ❌ | 46 | `46_add_history_page` | `/history`: the last 24 h of try-ons (`requireUser`) | Unit + E2E incl. signed-out redirect |
+| ❌ | 47 | `47_add_wishlist_cookie` | Anonymous-id cookie for signed-out visitors | Unit |
+| ❌ | 48 | `48_add_wishlist_actions` | Add to / remove from the wishlist | Unit (Prisma mocked) |
+| ❌ | 49 | `49_add_wishlist_page` | `/wishlist` page (public) | Unit + E2E |
+| ❌ | 50 | `50_add_wishlist_merge_on_sign_in` | Move anonymous items to the account on sign-in | Unit |
+
+### Group G: Privacy and limits
+
+| Status | # | Branch | What | Tests |
+|---|---|---|---|---|
+| ❌ | 51 | `51_add_cleanup_cron` | Hourly Inngest cron: delete try-ons older than 24 h and their Cloudinary images | Unit (mocks) |
+| ❌ | 52 | `52_add_tryon_rate_limit` | Per-user try-on limit | Unit: under/at/over the limit |
+
+### Group H: Housekeeping
+
+| Status | # | Branch | What | Tests |
+|---|---|---|---|---|
+| ✅ | 53 | `53_tidy_docs` | Add phase 2 tasks 30–54 to this list; remove stale blocker notes; fix the out-of-date line in `CLAUDE.md` | None (docs) |
+| ❌ | 54 | `54_reviewer_page_auth_check` | rules-reviewer check that every protected page calls `requireUser()` / `requireAdmin()` (approved) | Planted unprotected page is flagged |
+
 ## Blockers
 
-- **Base for `main`:** the developer picks (a) or (b) before the first PR.
-- **07:** these are third-party skills.
-  - Read each one's files before installing.
-  - Installing the guardrail hook changes `.claude/settings.json`, so the developer must approve that step.
-  - `skill-creator` may already be available here as `anthropic-skills:skill-creator`.
-- **08:** creating `.claude/agents/rules-reviewer.md` needs the developer's approval.
 - **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
+- **30:** needs the developer's `DATABASE_URL` (Atlas connection string, with the **new** password) in the local `.env`.
+- **52:** needs the developer's limit and time window (e.g. N try-ons per user per day).
 
-## Later (Phase 3+, not yet split into tasks)
+## Later (not yet split into tasks)
 
-- Confirm the Gradio `api_name` with `/gradio_api/info`.
 - Check the ZeroGPU free and PRO quotas.
 - Test sarees on the chosen model.
-- Set up Inngest.
-- Self-host CatVTON (if chosen).
+- Self-host CatVTON (if quality or the non-commercial license becomes a problem).
+- Decide on the Prisma CLI `npm audit` finding (downgrade to 6.12.0 or accept).
+- Decide on the `server-only` package.
