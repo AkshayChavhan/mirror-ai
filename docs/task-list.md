@@ -60,7 +60,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 30 | `30_add_db_push_script` | `npm run db:push` (`prisma db push`) to create the MongoDB collections and indexes from the schema | Script runs against the developer's Atlas database |
+| ✅ | 30 | `30_add_db_push_script` | `npm run db:push` (`prisma db push`) to create the MongoDB collections and indexes from the schema | Script runs against the developer's Atlas database |
 | ✅ | 31 | `31_add_product_queries` | `lib/products.ts`: list active, get one, create, update, delete | Unit (Prisma mocked) |
 | ✅ | 32 | `32_add_admin_products_list` | `/admin/products` list page (`requireAdmin`) | Unit + E2E: signed-out redirect, non-admin 404 |
 | ✅ | 33 | `33_add_admin_product_form` | Create/edit product form, with garment image upload to Cloudinary | Unit + E2E |
@@ -111,7 +111,6 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 ## Blockers
 
 - **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
-- **30:** needs the developer's `DATABASE_URL` (Atlas connection string, with the **new** password) in the local `.env`.
 - **52:** needs the developer's limit and time window (e.g. N try-ons per user per day).
 - **55:** a new task (added in task 38), so it needs the developer's OK before its branch is created.
 - **41:** waits for 55, so no user can create a try-on whose photo a product delete would leave behind forever.
