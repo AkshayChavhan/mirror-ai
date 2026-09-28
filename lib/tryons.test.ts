@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the database client: no MongoDB needed.
-const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() } }));
+const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn(), deleteMany: vi.fn() } }));
 vi.mock("./prisma", () => ({ prisma: { tryOn } }));
 
 import {
@@ -12,8 +12,10 @@ import {
   claimTryOn,
   completeTryOn,
   createTryOn,
+  deleteTryOns,
   failTryOn,
   getTryOnStatus,
+  listExpiredTryOns,
   listRecentTryOns,
   type NewTryOn,
 } from "./tryons";
@@ -47,6 +49,7 @@ describe("lib/tryons", () => {
     tryOn.updateMany.mockReset();
     tryOn.findFirst.mockReset();
     tryOn.findMany.mockReset();
+    tryOn.deleteMany.mockReset();
   });
 
   describe("createTryOn", () => {
@@ -240,6 +243,47 @@ describe("lib/tryons", () => {
     it("turns database errors into DB_ERROR", async () => {
       tryOn.findMany.mockRejectedValue(new Error("timeout"));
       expect((await recordError(listRecentTryOns("user_123"))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("listExpiredTryOns", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("finds try-ons at least 24 h old, across all users, oldest first, with just their image URLs", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-28T12:00:00Z"));
+      tryOn.findMany.mockResolvedValue([{ id: ID }]);
+      await expect(listExpiredTryOns(100)).resolves.toEqual([{ id: ID }]);
+      expect(tryOn.findMany).toHaveBeenCalledWith({
+        where: { createdAt: { lte: new Date("2026-09-27T12:00:00Z") } },
+        orderBy: { createdAt: "asc" },
+        take: 100,
+        select: { id: true, personUrl: true, resultUrl: true },
+      });
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      tryOn.findMany.mockRejectedValue(new Error("timeout"));
+      expect((await recordError(listExpiredTryOns(100))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("deleteTryOns", () => {
+    it("deletes the given rows (skipping malformed ids) and returns how many", async () => {
+      tryOn.deleteMany.mockResolvedValue({ count: 1 });
+      await expect(deleteTryOns([ID, "nope"])).resolves.toBe(1);
+      expect(tryOn.deleteMany).toHaveBeenCalledWith({ where: { id: { in: [ID] } } });
+    });
+
+    it("does nothing (no database call) when there's nothing valid to delete", async () => {
+      await expect(deleteTryOns([])).resolves.toBe(0);
+      await expect(deleteTryOns(["nope"])).resolves.toBe(0);
+      expect(tryOn.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      tryOn.deleteMany.mockRejectedValue(new Error("timeout"));
+      expect((await recordError(deleteTryOns([ID]))).code).toBe("DB_ERROR");
     });
   });
 });

@@ -185,3 +185,26 @@ export async function listRecentTryOns(userId: string): Promise<RecentTryOn[]> {
     }),
   );
 }
+
+/** An expired try-on, with just what the cleanup job needs to delete its images. */
+export type ExpiredTryOn = { id: string; personUrl: string; resultUrl: string | null };
+
+/** Up to `limit` try-ons older than 24 h, oldest first (for the cleanup job, across all users). */
+export async function listExpiredTryOns(limit: number): Promise<ExpiredTryOn[]> {
+  return db("listExpiredTryOns", () =>
+    prisma.tryOn.findMany({
+      where: { createdAt: { lte: new Date(Date.now() - TRYON_TTL_MS) } },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      select: { id: true, personUrl: true, resultUrl: true },
+    }),
+  );
+}
+
+/** Deletes try-on rows by id (the cleanup job calls it only after their images are gone). Returns how many. */
+export async function deleteTryOns(ids: string[]): Promise<number> {
+  const valid = ids.filter((id) => OBJECT_ID.test(id));
+  if (valid.length === 0) return 0;
+  const { count } = await db("deleteTryOns", () => prisma.tryOn.deleteMany({ where: { id: { in: valid } } }));
+  return count;
+}

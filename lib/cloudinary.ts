@@ -95,3 +95,25 @@ export async function deleteImage(publicId: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The public id inside a Cloudinary image URL as uploadImage stores it
+ * (https://res.cloudinary.com/<cloud>/image/upload/[v123/]<publicId>.<ext>), or null if it isn't one.
+ * Rows keep only the URL; deleteImage needs the public id.
+ */
+export function publicIdFromUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== "res.cloudinary.com") return null;
+  const match = parsed.pathname.match(/^\/[^/]+\/image\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null; // a malformed %-escape
+  }
+}
