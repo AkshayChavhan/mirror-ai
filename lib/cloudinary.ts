@@ -117,3 +117,12 @@ export function publicIdFromUrl(url: string): string | null {
     return null; // a malformed %-escape
   }
 }
+
+/**
+ * The same Cloudinary image, but served as a download (`fl_attachment`), because browsers ignore
+ * <a download> for images on another site. Null if `url` isn't a Cloudinary upload URL.
+ */
+export function downloadUrl(url: string): string | null {
+  if (!publicIdFromUrl(url)) return null;
+  return url.replace("/image/upload/", "/image/upload/fl_attachment/");
+}

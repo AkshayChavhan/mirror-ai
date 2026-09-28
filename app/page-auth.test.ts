@@ -16,6 +16,7 @@ const PUBLIC_PAGES: Record<string, string> = {
   "wishlist/page.tsx": "wishlist works signed out (anonymous cookie)",
   "sign-in/[[...sign-in]]/page.tsx": "Clerk sign-in",
   "sign-up/[[...sign-up]]/page.tsx": "Clerk sign-up",
+  "tryon/[shareId]/page.tsx": "a try-on result, public to anyone with its random share link (decided, for WhatsApp)",
 };
 
 const AUTH_FIRST = /^await (requireUser|requireAdmin)\(\)/;

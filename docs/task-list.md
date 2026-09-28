@@ -79,7 +79,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ✅ | 41 | `41_add_tryon_page_upload` | `/tryon`: product carousel, gallery upload, preview (Retake / Try on) | Unit + E2E incl. signed-out redirect |
 | ❌ | 42 | `42_add_tryon_camera` | Live camera capture with a pose guide overlay | Unit + E2E (fake camera) |
 | ❌ | 43 | `43_add_tryon_loading_screen` | Loading screen that polls until the try-on is done or has failed | Unit + E2E |
-| ❌ | 44 | `44_add_tryon_result_page` | `/tryon/[id]` (public link): before/after slider, download | Unit + E2E |
+| ✅ | 44 | `44_add_tryon_result_page` | `/tryon/[shareId]` (public link, random token from task 56): before/after slider, download | Unit + E2E |
 | ❌ | 45 | `45_add_whatsapp_share` | Share-to-WhatsApp button | Unit + E2E |
 
 ### Group F: History and wishlist
