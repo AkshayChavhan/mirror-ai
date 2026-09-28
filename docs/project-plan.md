@@ -25,14 +25,14 @@ A virtual try-on web app. A signed-in user picks a garment, captures or uploads 
 | `/` | Public | Landing page with a **"Try it on"** button. Products are browsable on this page ("Browsing products on the landing page is public") |
 | `/tryon` | Signed-in | Live camera with a pose guide, a product carousel at the bottom, and a capture button. A photo can also be **uploaded from the gallery** |
 | (in `/tryon`) | Signed-in | Capture → **preview** (Retake / Try on) → **loading screen** that polls the job status |
-| `/tryon/[id]` | **Public: anyone with the link** (decided, for WhatsApp sharing) | Result: **before/after slider**, download, **share to WhatsApp** |
+| `/tryon/[shareId]` | **Public: anyone with the link** (decided, for WhatsApp sharing). `shareId` is the random token (task 56) | Result: **before/after slider**, download, **share to WhatsApp** |
 | `/history` | Signed-in | The user's past try-ons (only the last 24 h, see Privacy) |
 | `/wishlist` | Public (signed out or in) | Saved products |
 | `/admin/products` | Admin | Add, edit, and delete products |
 | sign-in / sign-up | Public | Clerk pages (task 25) |
 
 - **Decided:** `/wishlist` works **without login** (see WishlistItem).
-- **Decided (2026-09-26):** a try-on result `/tryon/[id]` can be opened by **anyone with the link**, so WhatsApp sharing works. The link uses a **random share token** (`shareId`, 128-bit, task 56), **not** the MongoDB ObjectId: ObjectIds are a timestamp plus a counter, so one shared link would let someone guess others. Photos and results are deleted after 24 h. Starting a try-on, history, and the admin area still need sign-in.
+- **Decided (2026-09-26):** a try-on result `/tryon/[shareId]` can be opened by **anyone with the link**, so WhatsApp sharing works. The link uses a **random share token** (`shareId`, 128-bit, task 56), **not** the MongoDB ObjectId: ObjectIds are a timestamp plus a counter, so one shared link would let someone guess others. Photos and results are deleted after 24 h. Starting a try-on, history, and the admin area still need sign-in.
 - **How access is enforced:** `proxy.ts` only runs Clerk's middleware (Clerk Core 3 deprecates path-based protection). Each protected page calls `requireUser()` (signed-out visitors are redirected to `/sign-in`) or `requireAdmin()` (non-admins get a 404) from `lib/auth.ts`.
 
 ## Data model
@@ -140,7 +140,7 @@ These need new tasks, to be added to `docs/task-list.md` when we get there, with
 - the `/wishlist` page, the anonymous-id cookie, and moving items to the account on sign-in (the model exists since task 21);
 - the admin role check, and the `/admin/products` CRUD;
 - the `/tryon` camera, pose guide, carousel, capture/upload, preview, and loading screen;
-- the `/tryon/[id]` result page (before/after slider, download, WhatsApp share);
+- the `/tryon/[shareId]` result page (before/after slider, download, WhatsApp share);
 - the `/history` page;
 - **for each protected page** (`/tryon`, `/history`, `/admin/products`): call `requireUser()` / `requireAdmin()`, plus an E2E test that signed-out visitors are redirected to `/sign-in` (and that non-admins get a 404 on admin pages). Protection is per page since task 24, so a missed call leaves the page public;
 - the Inngest job for running try-ons;

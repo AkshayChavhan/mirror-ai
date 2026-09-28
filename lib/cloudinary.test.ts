@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { upload, destroy, config } = vi.hoisted(() => ({ upload: vi.fn(), destroy: vi.fn(), config: vi.fn() }));
 vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload, destroy } } }));
 
-import { ImageUploadError, deleteImage, publicIdFromUrl, uploadImage } from "./cloudinary";
+import { ImageUploadError, deleteImage, downloadUrl, publicIdFromUrl, uploadImage } from "./cloudinary";
 
 const FILE = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -153,4 +153,19 @@ describe("publicIdFromUrl", () => {
   ])("returns null for %s", (_case, url) => {
     expect(publicIdFromUrl(url)).toBeNull();
   });
+});
+
+describe("downloadUrl", () => {
+  it("serves a Cloudinary image as a download (fl_attachment)", () => {
+    expect(downloadUrl("https://res.cloudinary.com/demo/image/upload/v1712345678/mirror-ai/results/r.png")).toBe(
+      "https://res.cloudinary.com/demo/image/upload/fl_attachment/v1712345678/mirror-ai/results/r.png",
+    );
+  });
+
+  it.each([["not a URL", "nope"], ["another host", "https://example.com/image/upload/v1/r.png"]])(
+    "returns null for %s",
+    (_case, url) => {
+      expect(downloadUrl(url)).toBeNull();
+    },
+  );
 });
