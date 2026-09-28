@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 // Server-only product data access (docs/project-plan.md, "Product"). Admin checks happen in the
 // calling page/action (requireAdmin()); this module only validates input and talks to the database.
 
-export type ProductErrorCode = "INVALID_INPUT" | "NOT_FOUND" | "DB_ERROR";
+export type ProductErrorCode = "INVALID_INPUT" | "NOT_FOUND" | "DB_ERROR" | "IMAGES_NOT_DELETED";
 
 /** Any product problem. `message` is safe to show users; details are logged on the server. */
 export class ProductError extends Error {

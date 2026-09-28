@@ -7,7 +7,7 @@ const m = vi.hoisted(() => ({
   uploadImage: vi.fn(),
   createProduct: vi.fn(),
   updateProduct: vi.fn(),
-  deleteProduct: vi.fn(),
+  deleteProductAndImages: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
@@ -27,9 +27,10 @@ vi.mock("@/lib/products", async () => {
     validateProductInput: actual.validateProductInput, // real validation, so field checks are tested
     createProduct: m.createProduct,
     updateProduct: m.updateProduct,
-    deleteProduct: m.deleteProduct,
   };
 });
+
+vi.mock("@/lib/product-cleanup", () => ({ deleteProductAndImages: m.deleteProductAndImages }));
 
 import { ImageUploadError } from "@/lib/cloudinary";
 import { ProductError } from "@/lib/products";
@@ -193,24 +194,33 @@ describe("admin product actions", () => {
     it("checks admin access before deleting", async () => {
       m.requireAdmin.mockRejectedValue(new Error("NEXT_NOT_FOUND"));
       await expect(deleteProductAction(ID)).rejects.toThrow("NEXT_NOT_FOUND");
-      expect(m.deleteProduct).not.toHaveBeenCalled();
+      expect(m.deleteProductAndImages).not.toHaveBeenCalled();
     });
 
-    it("deletes and refreshes the list", async () => {
-      m.deleteProduct.mockResolvedValue(undefined);
+    it("deletes the product with its images and refreshes the list", async () => {
+      m.deleteProductAndImages.mockResolvedValue(undefined);
       await expect(deleteProductAction(ID)).resolves.toEqual({ error: null });
-      expect(m.deleteProduct).toHaveBeenCalledWith(ID);
+      expect(m.deleteProductAndImages).toHaveBeenCalledWith(ID);
       expect(m.revalidatePath).toHaveBeenCalledWith("/admin/products");
     });
 
     it("rejects a malformed id without touching the database", async () => {
       await expect(deleteProductAction("bad")).resolves.toEqual({ error: "That product doesn't exist." });
-      expect(m.deleteProduct).not.toHaveBeenCalled();
+      expect(m.deleteProductAndImages).not.toHaveBeenCalled();
     });
 
     it("shows NOT_FOUND for an already-deleted product", async () => {
-      m.deleteProduct.mockRejectedValue(new ProductError("NOT_FOUND", "That product doesn't exist."));
+      m.deleteProductAndImages.mockRejectedValue(new ProductError("NOT_FOUND", "That product doesn't exist."));
       await expect(deleteProductAction(ID)).resolves.toEqual({ error: "That product doesn't exist." });
+      expect(m.revalidatePath).not.toHaveBeenCalled(); // only IMAGES_NOT_DELETED refreshes on error
+    });
+
+    it("says to try again, and refreshes the list (the product is now hidden), when its try-on photos couldn't be deleted", async () => {
+      const message =
+        "We couldn't delete this product's try-on photos yet. It's hidden from shoppers now; please try deleting it again.";
+      m.deleteProductAndImages.mockRejectedValue(new ProductError("IMAGES_NOT_DELETED", message));
+      await expect(deleteProductAction(ID)).resolves.toEqual({ error: message });
+      expect(m.revalidatePath).toHaveBeenCalledWith("/admin/products");
     });
   });
 
