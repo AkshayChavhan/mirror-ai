@@ -57,6 +57,13 @@ npx playwright install chromium
 | `npm run test:e2e` | Playwright E2E tests against a production build on port 3100 |
 | `npm run db:push` | Create or update the MongoDB collections and indexes from `prisma/schema.prisma` (needs `DATABASE_URL` in `.env`) |
 
+## Known `npm audit` finding (accepted)
+
+`npm audit` reports 3 "high" entries. They're one issue: `deepmerge-ts` below 8 ([GHSA-ggr8-5vv4-36mx](https://github.com/advisories/GHSA-ggr8-5vv4-36mx), stack exhaustion when merging recursive objects).
+- It's pulled in only by the **Prisma command-line tool** (`prisma` → `@prisma/config`), which runs on our own schema during development and CI. It never handles user input, and it isn't in the app users run (0 files in the server build).
+- Prisma 6.19.3, the newest Prisma 6, still uses the affected version. npm's suggested "fix" is a downgrade to Prisma 6.12.0, which would lose later fixes. So it's accepted for now (task 59).
+- Revisit when `@prisma/config` moves to `deepmerge-ts` 8 or later. Even Prisma 7's `@prisma/config` (7.10.0) still uses 7.1.5, so upgrading Prisma alone wouldn't fix it.
+
 ## How work happens
 
 - Each task in [`docs/task-list.md`](docs/task-list.md) gets its own branch (`NN_task_name`), a learning doc, and tests.
