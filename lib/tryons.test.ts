@@ -3,10 +3,19 @@ import { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the database client: no MongoDB needed.
-const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn() } }));
+const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() } }));
 vi.mock("./prisma", () => ({ prisma: { tryOn } }));
 
-import { TryOnRecordError, claimTryOn, completeTryOn, createTryOn, failTryOn, type NewTryOn } from "./tryons";
+import {
+  TRYON_TTL_MS,
+  TryOnRecordError,
+  claimTryOn,
+  completeTryOn,
+  createTryOn,
+  failTryOn,
+  getTryOnStatus,
+  type NewTryOn,
+} from "./tryons";
 
 const ID = "65f0c0ffee0000000000abcd";
 const PRODUCT_ID = "65f0c0ffee0000000000beef";
@@ -35,6 +44,7 @@ describe("lib/tryons", () => {
     tryOn.create.mockReset();
     tryOn.update.mockReset();
     tryOn.updateMany.mockReset();
+    tryOn.findFirst.mockReset();
   });
 
   describe("createTryOn", () => {
@@ -157,6 +167,42 @@ describe("lib/tryons", () => {
     it("turns database errors into DB_ERROR", async () => {
       tryOn.updateMany.mockRejectedValue(new Error("timeout"));
       expect((await recordError(failTryOn(ID, "x", ["PENDING"]))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("getTryOnStatus", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("finds the OWNER's try-on from the last 24 h and returns only the status fields", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-28T12:00:00Z"));
+      const view = { status: "DONE", resultUrl: "https://res.cloudinary.com/demo/r.png", errorMessage: null };
+      tryOn.findFirst.mockResolvedValue(view);
+
+      await expect(getTryOnStatus(ID, "user_123")).resolves.toEqual(view);
+      expect(tryOn.findFirst).toHaveBeenCalledWith({
+        where: { id: ID, userId: "user_123", createdAt: { gt: new Date("2026-09-27T12:00:00Z") } },
+        select: { status: true, resultUrl: true, errorMessage: true },
+      });
+      expect(TRYON_TTL_MS).toBe(86_400_000);
+    });
+
+    it("returns null when it doesn't exist, isn't theirs, or is too old (the query finds nothing)", async () => {
+      tryOn.findFirst.mockResolvedValue(null);
+      await expect(getTryOnStatus(ID, "user_other")).resolves.toBeNull();
+    });
+
+    it.each([
+      ["a malformed id", "nope", "user_123"],
+      ["an empty user id", ID, ""],
+    ])("returns null for %s without touching the database", async (_case, id, userId) => {
+      await expect(getTryOnStatus(id, userId)).resolves.toBeNull();
+      expect(tryOn.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      tryOn.findFirst.mockRejectedValue(new Error("timeout"));
+      expect((await recordError(getTryOnStatus(ID, "user_123"))).code).toBe("DB_ERROR");
     });
   });
 });

@@ -128,3 +128,27 @@ export async function failTryOn(id: string, errorMessage: string, from: TryOnSta
   );
   return count > 0;
 }
+
+/** Try-ons (and their photos) live for 24 h (docs/project-plan.md, "Privacy"). */
+export const TRYON_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Only what the loading screen shows: never the photos' owner, ids or anything else. */
+export type TryOnStatusView = {
+  status: TryOnStatus;
+  resultUrl: string | null;
+  errorMessage: string | null;
+};
+
+/**
+ * One try-on's status for its OWNER, or null when it doesn't exist, belongs to someone else, or is
+ * older than 24 h (in case the cleanup job runs late). All three look the same to the caller.
+ */
+export async function getTryOnStatus(id: string, userId: string): Promise<TryOnStatusView | null> {
+  if (!OBJECT_ID.test(id) || !userId) return null;
+  return db("getTryOnStatus", () =>
+    prisma.tryOn.findFirst({
+      where: { id, userId, createdAt: { gt: new Date(Date.now() - TRYON_TTL_MS) } },
+      select: { status: true, resultUrl: true, errorMessage: true },
+    }),
+  );
+}
