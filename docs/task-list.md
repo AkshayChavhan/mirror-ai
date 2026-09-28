@@ -76,7 +76,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ✅ | 38 | `38_add_tryon_create_action` | "Try on" action: `requireUser`, upload the person photo, create a `PENDING` try-on, send the job event | Unit (mocks) |
 | ✅ | 39 | `39_add_tryon_job` | Job: `PROCESSING` → `runTryOn()` → result to Cloudinary → `DONE` / `FAILED` | Unit (mocks), every path |
 | ✅ | 40 | `40_add_tryon_status_endpoint` | Status endpoint for polling | Unit + E2E |
-| ❌ | 41 | `41_add_tryon_page_upload` | `/tryon`: product carousel, gallery upload, preview (Retake / Try on) | Unit + E2E incl. signed-out redirect |
+| ✅ | 41 | `41_add_tryon_page_upload` | `/tryon`: product carousel, gallery upload, preview (Retake / Try on) | Unit + E2E incl. signed-out redirect |
 | ❌ | 42 | `42_add_tryon_camera` | Live camera capture with a pose guide overlay | Unit + E2E (fake camera) |
 | ❌ | 43 | `43_add_tryon_loading_screen` | Loading screen that polls until the try-on is done or has failed | Unit + E2E |
 | ❌ | 44 | `44_add_tryon_result_page` | `/tryon/[id]` (public link): before/after slider, download | Unit + E2E |
@@ -117,7 +117,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 - **52:** needs the developer's limit and time window (e.g. N try-ons per user per day).
 - **44:** waits for 56, so public result links can't be guessed.
 - **57:** approved; still needs the developer's item limit (e.g. 100 items per owner).
-- **42, 43:** build on the `/tryon` page (41). **45:** builds on the result page (44). They follow those tasks.
+- **45:** builds on the result page (44), so it follows that task.
 
 ## Later (not yet split into tasks)
 
