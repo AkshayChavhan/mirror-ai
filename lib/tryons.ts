@@ -1,4 +1,4 @@
-import { Prisma, TryOnStatus, type TryOn } from "@prisma/client";
+import { Prisma, TryOnStatus, type Category, type TryOn } from "@prisma/client";
 import { prisma } from "./prisma";
 
 // Server-only try-on rows in the database (docs/project-plan.md, "TryOn" and "Try-on job lifecycle").
@@ -66,10 +66,65 @@ export async function createTryOn(input: NewTryOn): Promise<TryOn> {
   );
 }
 
-/** Marks a try-on FAILED. `errorMessage` must be safe to show the user (never a provider error). */
-export async function failTryOn(id: string, errorMessage: string): Promise<void> {
-  if (!OBJECT_ID.test(id)) throw new TryOnRecordError("NOT_FOUND", "That try-on doesn't exist.");
-  await db("failTryOn", () =>
-    prisma.tryOn.update({ where: { id }, data: { status: TryOnStatus.FAILED, errorMessage } }),
+/** What the job needs to run the model for one try-on. */
+export type ClaimedTryOn = {
+  personUrl: string;
+  garmentUrl: string;
+  category: Category;
+};
+
+/** Runs an update that only matches when the row is in the expected status: "no match" becomes null. */
+async function ifStatusMatches<T>(action: string, run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await db(action, run);
+  } catch (error) {
+    if (error instanceof TryOnRecordError && error.code === "NOT_FOUND") return null;
+    throw error;
+  }
+}
+
+/**
+ * Moves a PENDING try-on to PROCESSING (lifecycle step 2) in ONE atomic update, so a duplicate
+ * event can't run the model twice. Returns null when the row is gone or no longer PENDING.
+ */
+export async function claimTryOn(id: string): Promise<ClaimedTryOn | null> {
+  if (!OBJECT_ID.test(id)) return null;
+  const row = await ifStatusMatches("claimTryOn", () =>
+    prisma.tryOn.update({
+      where: { id, status: TryOnStatus.PENDING },
+      data: { status: TryOnStatus.PROCESSING },
+      select: { personUrl: true, product: { select: { imageUrl: true, category: true } } },
+    }),
   );
+  return row && { personUrl: row.personUrl, garmentUrl: row.product.imageUrl, category: row.product.category };
+}
+
+/** Saves the result and marks the try-on DONE (lifecycle step 3). False when it's gone or no longer PROCESSING. */
+export async function completeTryOn(id: string, resultUrl: string): Promise<boolean> {
+  if (!isHttpsUrl(resultUrl)) invalid("The try-on result is missing.");
+  if (!OBJECT_ID.test(id)) return false;
+  const row = await ifStatusMatches("completeTryOn", () =>
+    prisma.tryOn.update({
+      where: { id, status: TryOnStatus.PROCESSING },
+      data: { status: TryOnStatus.DONE, resultUrl },
+      select: { id: true },
+    }),
+  );
+  return row !== null;
+}
+
+/**
+ * Marks a try-on FAILED (lifecycle step 4), but only while it's in one of `from`, so a late failure
+ * can never overwrite a newer status (e.g. a DONE try-on). False when nothing matched.
+ * `errorMessage` must be safe to show the user (never a provider error).
+ */
+export async function failTryOn(id: string, errorMessage: string, from: TryOnStatus[]): Promise<boolean> {
+  if (!OBJECT_ID.test(id)) return false;
+  const { count } = await db("failTryOn", () =>
+    prisma.tryOn.updateMany({
+      where: { id, status: { in: from } },
+      data: { status: TryOnStatus.FAILED, errorMessage },
+    }),
+  );
+  return count > 0;
 }

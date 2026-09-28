@@ -74,7 +74,7 @@ describe("createTryOnAction", () => {
     m.uploadImage.mockResolvedValue(UPLOADED);
     m.deleteImage.mockResolvedValue(true);
     m.createTryOn.mockResolvedValue({ id: TRYON_ID, status: "PENDING" });
-    m.failTryOn.mockResolvedValue(undefined);
+    m.failTryOn.mockResolvedValue(true);
     m.send.mockResolvedValue({ ids: ["evt_1"] });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -185,7 +185,7 @@ describe("createTryOnAction", () => {
     const inngestError = new Error("401 Event key not found");
     m.send.mockRejectedValue(inngestError);
     await expect(createTryOnAction(EMPTY, form())).resolves.toEqual(START_FAILED);
-    expect(m.failTryOn).toHaveBeenCalledWith(TRYON_ID, START_FAILED.error);
+    expect(m.failTryOn).toHaveBeenCalledWith(TRYON_ID, START_FAILED.error, ["PENDING"]); // never overwrites the job's status
     expect(m.deleteImage).not.toHaveBeenCalled(); // the row still exists, so the cleanup job will delete the photo
     expect(console.error).toHaveBeenCalledWith("[tryon] Sending the try-on event failed:", inngestError);
   });
