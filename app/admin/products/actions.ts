@@ -4,10 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { ImageUploadError, uploadImage } from "@/lib/cloudinary";
+import { deleteProductAndImages } from "@/lib/product-cleanup";
 import {
   ProductError,
   createProduct,
-  deleteProduct,
   updateProduct,
   validateProductInput,
   type ProductInput,
@@ -109,13 +109,15 @@ export async function updateProductAction(
   redirect("/admin/products");
 }
 
-/** Permanently deletes a product (its try-ons and wishlist items cascade). Admin only. */
+/** Permanently deletes a product with its images (its try-ons and wishlist items cascade). Admin only. */
 export async function deleteProductAction(id: string): Promise<ProductFormState> {
   await requireAdmin();
   try {
     assertBoundId(id);
-    await deleteProduct(id);
+    await deleteProductAndImages(id); // photos first; if they can't all be deleted, the product is only hidden
   } catch (error) {
+    // The product was hidden before the photos failed: refresh the list so the admin sees that.
+    if (error instanceof ProductError && error.code === "IMAGES_NOT_DELETED") revalidatePath("/admin/products");
     return toFormState(error);
   }
   revalidatePath("/admin/products");
