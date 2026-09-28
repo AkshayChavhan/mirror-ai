@@ -10,6 +10,7 @@ vi.mock("@/lib/wishlist", async () => {
   return { WishlistError: actual.WishlistError, listWishlist: m.listWishlist };
 });
 // The button is tested in RemoveButton.test.tsx; here we only check it's placed per item.
+vi.mock("./ClaimAnonymousWishlist", () => ({ default: () => <p data-testid="claim">claiming</p> }));
 vi.mock("./RemoveButton", () => ({
   default: ({ itemId, name }: { itemId: string; name: string }) => <span data-testid="remove">{`${itemId}:${name}`}</span>,
 }));
@@ -52,9 +53,17 @@ describe("/wishlist", () => {
     m.auth.mockResolvedValue({ userId: "user_123" });
     m.listWishlist.mockResolvedValue([entry()]);
     const region = await renderPage();
-    expect(m.listWishlist).toHaveBeenCalledWith({ userId: "user_123" });
-    expect(m.getAnonymousId).not.toHaveBeenCalled();
+    expect(m.listWishlist).toHaveBeenCalledWith({ userId: "user_123" }); // never the anonymous list
     expect(within(region).getByRole("heading", { level: 2, name: "Linen Shirt" })).toBeInTheDocument();
+    expect(screen.queryByTestId("claim")).not.toBeInTheDocument(); // no cookie: nothing to move
+  });
+
+  it("signed in with a leftover anonymous cookie, starts moving those items into the account", async () => {
+    m.auth.mockResolvedValue({ userId: "user_123" });
+    m.getAnonymousId.mockResolvedValue(ANON);
+    await renderPage();
+    expect(screen.getByTestId("claim")).toBeInTheDocument();
+    expect(m.listWishlist).toHaveBeenCalledWith({ userId: "user_123" });
   });
 
   it("signed out, shows the anonymous visitor's wishlist from their cookie", async () => {
@@ -62,6 +71,7 @@ describe("/wishlist", () => {
     m.listWishlist.mockResolvedValue([entry()]);
     await renderPage();
     expect(m.listWishlist).toHaveBeenCalledWith({ anonymousId: ANON });
+    expect(screen.queryByTestId("claim")).not.toBeInTheDocument(); // signed out: nothing to move
   });
 
   it("signed out with no cookie, shows the empty state without touching the database", async () => {

@@ -2,10 +2,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the database client: no MongoDB needed.
-const { wishlistItem } = vi.hoisted(() => ({ wishlistItem: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() } }));
+const { wishlistItem } = vi.hoisted(() => ({ wishlistItem: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() } }));
 vi.mock("./prisma", () => ({ prisma: { wishlistItem } }));
 
-import { WishlistError, addWishlistItem, listWishlist, removeWishlistItem, type WishlistOwner } from "./wishlist";
+import {
+  WishlistError,
+  addWishlistItem,
+  claimAnonymousItems,
+  listWishlist,
+  removeWishlistItem,
+  type WishlistOwner,
+} from "./wishlist";
 
 const PRODUCT_ID = "65f0c0ffee0000000000beef";
 const ITEM_ID = "65f0c0ffee0000000000abcd";
@@ -27,6 +34,7 @@ describe("lib/wishlist", () => {
     wishlistItem.create.mockReset();
     wishlistItem.deleteMany.mockReset();
     wishlistItem.findMany.mockReset();
+    wishlistItem.updateMany.mockReset();
   });
 
   describe("addWishlistItem", () => {
@@ -120,6 +128,35 @@ describe("lib/wishlist", () => {
     it("turns database errors into DB_ERROR", async () => {
       wishlistItem.findMany.mockRejectedValue(new Error("timeout"));
       expect((await wishlistError(listWishlist(USER))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("claimAnonymousItems", () => {
+    it("moves every item still under the anonymous id (with no user, null OR missing) to the user, in one update", async () => {
+      wishlistItem.updateMany.mockResolvedValue({ count: 3 });
+      await expect(claimAnonymousItems(ANON.anonymousId, "user_123")).resolves.toBe(3);
+      expect(wishlistItem.updateMany).toHaveBeenCalledWith({
+        where: { anonymousId: ANON.anonymousId, OR: [{ userId: null }, { userId: { isSet: false } }] },
+        data: { userId: "user_123", anonymousId: null },
+      });
+    });
+
+    it("returns 0 when there's nothing to move (e.g. a repeat call)", async () => {
+      wishlistItem.updateMany.mockResolvedValue({ count: 0 });
+      await expect(claimAnonymousItems(ANON.anonymousId, "user_123")).resolves.toBe(0);
+    });
+
+    it.each([
+      ["an empty anonymous id", "", "user_123"],
+      ["an empty user id", ANON.anonymousId, ""],
+    ])("rejects %s without touching the database", async (_case, anonymousId, userId) => {
+      expect((await wishlistError(claimAnonymousItems(anonymousId, userId))).code).toBe("INVALID_INPUT");
+      expect(wishlistItem.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      wishlistItem.updateMany.mockRejectedValue(new Error("timeout"));
+      expect((await wishlistError(claimAnonymousItems(ANON.anonymousId, "user_123"))).code).toBe("DB_ERROR");
     });
   });
 });

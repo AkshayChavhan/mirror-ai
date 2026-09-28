@@ -5,25 +5,31 @@ import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { getAnonymousId } from "@/lib/anonymous-id";
 import { WishlistError, listWishlist, type WishlistEntry, type WishlistOwner } from "@/lib/wishlist";
+import ClaimAnonymousWishlist from "./ClaimAnonymousWishlist";
 import RemoveButton from "./RemoveButton";
 
 export const metadata: Metadata = { title: "Wishlist · Mirror AI" };
 
-/** Whose wishlist to show: the signed-in user, else the anonymous visitor (read-only: no cookie is created). */
-async function currentOwner(): Promise<WishlistOwner | null> {
+/**
+ * Whose wishlist to show: the signed-in user, else the anonymous visitor (read-only: no cookie is created).
+ * `claimPending`: signed in but still holding an anonymous cookie, so items saved while signed out must move.
+ */
+async function currentOwner(): Promise<{ owner: WishlistOwner | null; claimPending: boolean }> {
   const { userId } = await auth();
-  if (userId) return { userId };
   const anonymousId = await getAnonymousId();
-  return anonymousId ? { anonymousId } : null;
+  if (userId) return { owner: { userId }, claimPending: anonymousId !== null };
+  return { owner: anonymousId ? { anonymousId } : null, claimPending: false };
 }
 
 /** Saved garments (docs/project-plan.md, "Pages and flow": public, signed out or in). */
 export default async function WishlistPage() {
   let entries: WishlistEntry[] = [];
   let error: string | null = null;
+  let claimPending = false;
   try {
-    const owner = await currentOwner();
-    if (owner) entries = await listWishlist(owner); // no owner yet: nothing saved, no database call
+    const current = await currentOwner();
+    claimPending = current.claimPending;
+    if (current.owner) entries = await listWishlist(current.owner); // no owner yet: nothing saved, no database call
   } catch (err) {
     unstable_rethrow(err); // Next's own control-flow errors (e.g. from cookies()) must reach Next, not this catch
     // lib/wishlist already logged database errors; log anything else (e.g. Clerk failing) here.
@@ -34,6 +40,7 @@ export default async function WishlistPage() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">Wishlist</h1>
+      {claimPending && <ClaimAnonymousWishlist />}
 
       <section aria-label="Saved garments">
         {error ? (
