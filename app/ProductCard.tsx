@@ -1,6 +1,7 @@
 import type { Product } from "@prisma/client";
 import Image from "next/image";
 import Link from "next/link";
+import SaveButton from "./SaveButton";
 
 const CATEGORY_LABEL: Record<Product["category"], string> = {
   UPPER: "Top",
@@ -52,6 +53,7 @@ export default function ProductCard({ product }: Props) {
             Buy
           </a>
         )}
+        <SaveButton productId={product.id} name={product.name} />
       </div>
     </li>
   );

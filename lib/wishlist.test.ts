@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the database client: no MongoDB needed.
-const { wishlistItem } = vi.hoisted(() => ({ wishlistItem: { create: vi.fn(), deleteMany: vi.fn() } }));
+const { wishlistItem } = vi.hoisted(() => ({ wishlistItem: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() } }));
 vi.mock("./prisma", () => ({ prisma: { wishlistItem } }));
 
-import { WishlistError, addWishlistItem, removeWishlistItem, type WishlistOwner } from "./wishlist";
+import { WishlistError, addWishlistItem, listWishlist, removeWishlistItem, type WishlistOwner } from "./wishlist";
 
 const PRODUCT_ID = "65f0c0ffee0000000000beef";
 const ITEM_ID = "65f0c0ffee0000000000abcd";
@@ -26,6 +26,7 @@ describe("lib/wishlist", () => {
     vi.restoreAllMocks();
     wishlistItem.create.mockReset();
     wishlistItem.deleteMany.mockReset();
+    wishlistItem.findMany.mockReset();
   });
 
   describe("addWishlistItem", () => {
@@ -89,6 +90,36 @@ describe("lib/wishlist", () => {
     it("turns database errors into DB_ERROR", async () => {
       wishlistItem.deleteMany.mockRejectedValue(new Error("timeout"));
       expect((await wishlistError(removeWishlistItem(ANON, ITEM_ID))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("listWishlist", () => {
+    it.each([
+      ["a signed-in user", USER, { userId: "user_123" }],
+      ["an anonymous visitor", ANON, { anonymousId: ANON.anonymousId }],
+    ] as const)("lists %s's items for visible garments, newest first, with only what the page shows", async (_case, owner, fields) => {
+      wishlistItem.findMany.mockResolvedValue([{ id: ITEM_ID }]);
+      await expect(listWishlist(owner)).resolves.toEqual([{ id: ITEM_ID }]);
+      expect(wishlistItem.findMany).toHaveBeenCalledWith({
+        where: { ...fields, product: { isActive: true } },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        select: {
+          id: true,
+          createdAt: true,
+          product: { select: { id: true, name: true, imageUrl: true, price: true, buyLink: true } },
+        },
+      });
+    });
+
+    it("rejects an empty owner without touching the database", async () => {
+      expect((await wishlistError(listWishlist({ userId: "" }))).code).toBe("INVALID_INPUT");
+      expect(wishlistItem.findMany).not.toHaveBeenCalled();
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      wishlistItem.findMany.mockRejectedValue(new Error("timeout"));
+      expect((await wishlistError(listWishlist(USER))).code).toBe("DB_ERROR");
     });
   });
 });
