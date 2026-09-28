@@ -48,6 +48,9 @@ model Product {
 /// One try-on attempt. Images and the row itself are deleted after 24 hours (privacy cron).
 model TryOn {
   id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  /// Random, unguessable token for the public result link /tryon/[shareId] (task 56). Never the ObjectId,
+  /// which is a timestamp plus a counter and can be guessed from one shared link.
+  shareId      String      @unique
   /// Clerk user id.
   userId       String
   productId    String      @db.ObjectId

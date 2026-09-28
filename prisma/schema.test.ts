@@ -46,8 +46,12 @@ describe("generated Prisma client", () => {
 
   it("has the planned TryOn fields", () => {
     expect(Object.keys(Prisma.TryOnScalarFieldEnum)).toEqual([
-      "id", "userId", "productId", "personUrl", "resultUrl", "status", "errorMessage", "createdAt",
+      "id", "shareId", "userId", "productId", "personUrl", "resultUrl", "status", "errorMessage", "createdAt",
     ]);
+  });
+
+  it("makes the public share token unique", () => {
+    expect(schema).toMatch(/shareId\s+String\s+@unique/);
   });
 
   it("has WishlistItem with both userId and anonymousId (signed in or out)", () => {

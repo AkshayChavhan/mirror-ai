@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { Prisma, TryOnStatus, type Category, type TryOn } from "@prisma/client";
 import { prisma } from "./prisma";
 
@@ -26,6 +27,13 @@ export type NewTryOn = {
 };
 
 const OBJECT_ID = /^[a-f0-9]{24}$/i;
+/** A share token: 16 random bytes in base64url, always 22 characters (an ObjectId never matches). */
+const SHARE_ID = /^[A-Za-z0-9_-]{22}$/;
+
+/** A new share token for the public result link: 128 random bits, so it can't be guessed. */
+function newShareId(): string {
+  return randomBytes(16).toString("base64url");
+}
 
 function isHttpsUrl(value: string): boolean {
   try {
@@ -62,7 +70,9 @@ export async function createTryOn(input: NewTryOn): Promise<TryOn> {
   if (typeof personUrl !== "string" || !isHttpsUrl(personUrl)) invalid("Please add a photo of yourself.");
 
   return db("createTryOn", () =>
-    prisma.tryOn.create({ data: { userId, productId, personUrl, status: TryOnStatus.PENDING } }),
+    prisma.tryOn.create({
+      data: { userId, productId, personUrl, status: TryOnStatus.PENDING, shareId: newShareId() },
+    }),
   );
 }
 
@@ -132,11 +142,12 @@ export async function failTryOn(id: string, errorMessage: string, from: TryOnSta
 /** Try-ons (and their photos) live for 24 h (docs/project-plan.md, "Privacy"). */
 export const TRYON_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Only what the loading screen shows: never the photos' owner, ids or anything else. */
+/** Only what the loading screen needs: the status, and when done, the result and its share token. */
 export type TryOnStatusView = {
   status: TryOnStatus;
   resultUrl: string | null;
   errorMessage: string | null;
+  shareId: string;
 };
 
 /**
@@ -148,7 +159,7 @@ export async function getTryOnStatus(id: string, userId: string): Promise<TryOnS
   return db("getTryOnStatus", () =>
     prisma.tryOn.findFirst({
       where: { id, userId, createdAt: { gt: new Date(Date.now() - TRYON_TTL_MS) } },
-      select: { status: true, resultUrl: true, errorMessage: true },
+      select: { status: true, resultUrl: true, errorMessage: true, shareId: true },
     }),
   );
 }
@@ -207,4 +218,28 @@ export async function deleteTryOns(ids: string[]): Promise<number> {
   if (valid.length === 0) return 0;
   const { count } = await db("deleteTryOns", () => prisma.tryOn.deleteMany({ where: { id: { in: valid } } }));
   return count;
+}
+
+/** What the public result page (task 44) may show to anyone with the link. */
+export type SharedTryOn = {
+  status: TryOnStatus;
+  personUrl: string;
+  resultUrl: string | null;
+  createdAt: Date;
+  product: { name: string };
+};
+
+/**
+ * A try-on by its share token, for the public link /tryon/[shareId], or null. Only a real share token
+ * works: an ObjectId (or anything else) is rejected without a database call, so ids can't be guessed.
+ * Older than 24 h counts as gone, even if the cleanup job runs late.
+ */
+export async function getSharedTryOn(shareId: string): Promise<SharedTryOn | null> {
+  if (!SHARE_ID.test(shareId)) return null;
+  return db("getSharedTryOn", () =>
+    prisma.tryOn.findFirst({
+      where: { shareId, createdAt: { gt: new Date(Date.now() - TRYON_TTL_MS) } },
+      select: { status: true, personUrl: true, resultUrl: true, createdAt: true, product: { select: { name: true } } },
+    }),
+  );
 }

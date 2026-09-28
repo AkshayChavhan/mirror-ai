@@ -32,7 +32,7 @@ A virtual try-on web app. A signed-in user picks a garment, captures or uploads 
 | sign-in / sign-up | Public | Clerk pages (task 25) |
 
 - **Decided:** `/wishlist` works **without login** (see WishlistItem).
-- **Decided (2026-09-26):** a try-on result `/tryon/[id]` can be opened by **anyone with the link**, so WhatsApp sharing works. Ids are random MongoDB ObjectIds, and photos and results are deleted after 24 h. Starting a try-on, history, and the admin area still need sign-in.
+- **Decided (2026-09-26):** a try-on result `/tryon/[id]` can be opened by **anyone with the link**, so WhatsApp sharing works. The link uses a **random share token** (`shareId`, 128-bit, task 56), **not** the MongoDB ObjectId: ObjectIds are a timestamp plus a counter, so one shared link would let someone guess others. Photos and results are deleted after 24 h. Starting a try-on, history, and the admin area still need sign-in.
 - **How access is enforced:** `proxy.ts` only runs Clerk's middleware (Clerk Core 3 deprecates path-based protection). Each protected page calls `requireUser()` (signed-out visitors are redirected to `/sign-in`) or `requireAdmin()` (non-admins get a 404) from `lib/auth.ts`.
 
 ## Data model
@@ -57,7 +57,8 @@ No sizes or brands for now.
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | ObjectId | |
+| `id` | ObjectId | Internal only, never in a public link |
+| `shareId` | string, unique | Random 128-bit token for the public link `/tryon/[shareId]` (task 56) |
 | `userId` | string | Clerk user id |
 | `productId` | ObjectId → Product | |
 | `personUrl` | string | The captured photo (Cloudinary) |
