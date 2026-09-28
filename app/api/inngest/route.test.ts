@@ -33,7 +33,7 @@ describe("app/api/inngest route", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       mode: "dev",
-      function_count: 2, // the try-on job, plus its onFailure handler ("run-tryon-failure"), which Inngest registers separately
+      function_count: 3, // the try-on job + its onFailure handler ("run-tryon-failure", registered separately) + the cleanup cron
       has_signing_key: false,
     });
   });

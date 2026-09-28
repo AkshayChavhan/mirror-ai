@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const { upload, destroy, config } = vi.hoisted(() => ({ upload: vi.fn(), destroy: vi.fn(), config: vi.fn() }));
 vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload, destroy } } }));
 
-import { ImageUploadError, deleteImage, uploadImage } from "./cloudinary";
+import { ImageUploadError, deleteImage, publicIdFromUrl, uploadImage } from "./cloudinary";
 
 const FILE = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -131,5 +131,26 @@ describe("deleteImage", () => {
   it("returns false for an empty public id", async () => {
     await expect(deleteImage("  ")).resolves.toBe(false);
     expect(destroy).not.toHaveBeenCalled();
+  });
+});
+
+describe("publicIdFromUrl", () => {
+  it.each([
+    ["a stored upload URL with a version", "https://res.cloudinary.com/demo/image/upload/v1712345678/mirror-ai/people/abc123.jpg", "mirror-ai/people/abc123"],
+    ["a URL without a version", "https://res.cloudinary.com/demo/image/upload/mirror-ai/results/r.png", "mirror-ai/results/r"],
+    ["an escaped character", "https://res.cloudinary.com/demo/image/upload/v1/mirror-ai/people/a%20b.webp", "mirror-ai/people/a b"],
+  ])("reads the public id from %s", (_case, url, id) => {
+    expect(publicIdFromUrl(url)).toBe(id);
+  });
+
+  it.each([
+    ["not a URL", "nope"],
+    ["plain http", "http://res.cloudinary.com/demo/image/upload/v1/mirror-ai/people/a.jpg"],
+    ["another host", "https://evil.example.com/demo/image/upload/v1/mirror-ai/people/a.jpg"],
+    ["a video URL", "https://res.cloudinary.com/demo/video/upload/v1/mirror-ai/people/a.mp4"],
+    ["no file extension", "https://res.cloudinary.com/demo/image/upload/v1/mirror-ai/people/a"],
+    ["a broken escape", "https://res.cloudinary.com/demo/image/upload/v1/mirror-ai/people/%E0%A4%A.jpg"],
+  ])("returns null for %s", (_case, url) => {
+    expect(publicIdFromUrl(url)).toBeNull();
   });
 });
