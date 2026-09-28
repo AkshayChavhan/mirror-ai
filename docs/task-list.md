@@ -74,7 +74,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ✅ | 36 | `36_install_inngest` | `inngest@4.21.0` and its client | Client loads (unit) |
 | ✅ | 37 | `37_add_inngest_route` | `app/api/inngest` route (local Inngest dev server) | Unit + route responds |
 | ✅ | 38 | `38_add_tryon_create_action` | "Try on" action: `requireUser`, upload the person photo, create a `PENDING` try-on, send the job event | Unit (mocks) |
-| ❌ | 39 | `39_add_tryon_job` | Job: `PROCESSING` → `runTryOn()` → result to Cloudinary → `DONE` / `FAILED` | Unit (mocks), every path |
+| ✅ | 39 | `39_add_tryon_job` | Job: `PROCESSING` → `runTryOn()` → result to Cloudinary → `DONE` / `FAILED` | Unit (mocks), every path |
 | ❌ | 40 | `40_add_tryon_status_endpoint` | Status endpoint for polling | Unit + E2E |
 | ❌ | 41 | `41_add_tryon_page_upload` | `/tryon`: product carousel, gallery upload, preview (Retake / Try on) | Unit + E2E incl. signed-out redirect |
 | ❌ | 42 | `42_add_tryon_camera` | Live camera capture with a pose guide overlay | Unit + E2E (fake camera) |

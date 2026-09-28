@@ -100,7 +100,8 @@ export async function createTryOnAction(_prev: TryOnFormState, formData: FormDat
   } catch (error) {
     console.error("[tryon] Sending the try-on event failed:", error);
     // Keep the row (so the 24 h cleanup still deletes the photo), but don't leave it PENDING forever.
-    await failTryOn(tryOnId, START_FAILED).catch((failError: unknown) => {
+    // Only while still PENDING: if the event did get through, the job's newer status wins.
+    await failTryOn(tryOnId, START_FAILED, ["PENDING"]).catch((failError: unknown) => {
       console.error("[tryon] Marking the try-on FAILED also failed:", failError);
     });
     return failed(START_FAILED);
