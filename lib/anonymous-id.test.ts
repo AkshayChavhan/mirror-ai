@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A fake cookie store instead of a real request: next/headers' cookies() is mocked.
-const store = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }));
+const store = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn(), delete: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => store }));
 
-import { ANONYMOUS_ID_COOKIE, getAnonymousId, getOrCreateAnonymousId } from "./anonymous-id";
+import { ANONYMOUS_ID_COOKIE, clearAnonymousId, getAnonymousId, getOrCreateAnonymousId } from "./anonymous-id";
 
 const VALID = "3f2b8c1e-9d4a-4b7e-8a21-5c6d7e8f9a0b";
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -83,6 +83,13 @@ describe("lib/anonymous-id", () => {
       const a = await getOrCreateAnonymousId();
       const b = await getOrCreateAnonymousId();
       expect(a).not.toBe(b);
+    });
+  });
+
+  describe("clearAnonymousId", () => {
+    it("deletes the anonymous id cookie", async () => {
+      await clearAnonymousId();
+      expect(store.delete).toHaveBeenCalledWith("mirror_anon_id");
     });
   });
 });

@@ -89,3 +89,20 @@ export async function listWishlist(owner: WishlistOwner): Promise<WishlistEntry[
     }),
   );
 }
+
+/**
+ * Moves every item saved under an anonymous id to a signed-in user (after sign-in). One atomic update,
+ * and only items still without a user. Returns how many moved (0 if there were none, or on a repeat call).
+ */
+export async function claimAnonymousItems(anonymousId: string, userId: string): Promise<number> {
+  if (!anonymousId || !userId) throw new WishlistError("INVALID_INPUT", "We couldn't find your wishlist.");
+  const { count } = await db("claimAnonymousItems", () =>
+    prisma.wishlistItem.updateMany({
+      // "No user yet": on MongoDB, Prisma treats a null field and a missing field differently, and an item
+      // created without userId may have the field missing. Match both.
+      where: { anonymousId, OR: [{ userId: null }, { userId: { isSet: false } }] },
+      data: { userId, anonymousId: null },
+    }),
+  );
+  return count;
+}

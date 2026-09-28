@@ -39,3 +39,8 @@ export async function getOrCreateAnonymousId(): Promise<string> {
   });
   return id;
 }
+
+/** Deletes the anonymous id cookie (after its items moved to an account). Server Action or Route Handler only. */
+export async function clearAnonymousId(): Promise<void> {
+  (await cookies()).delete(ANONYMOUS_ID_COOKIE);
+}

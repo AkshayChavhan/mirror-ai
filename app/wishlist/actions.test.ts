@@ -9,6 +9,8 @@ const m = vi.hoisted(() => ({
   getProduct: vi.fn(),
   addWishlistItem: vi.fn(),
   removeWishlistItem: vi.fn(),
+  claimAnonymousItems: vi.fn(),
+  clearAnonymousId: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: m.auth }));
@@ -16,6 +18,7 @@ vi.mock("next/cache", () => ({ revalidatePath: m.revalidatePath }));
 vi.mock("@/lib/anonymous-id", () => ({
   getAnonymousId: m.getAnonymousId,
   getOrCreateAnonymousId: m.getOrCreateAnonymousId,
+  clearAnonymousId: m.clearAnonymousId,
 }));
 vi.mock("@/lib/products", async () => {
   const actual = await vi.importActual<typeof import("@/lib/products")>("@/lib/products");
@@ -23,12 +26,17 @@ vi.mock("@/lib/products", async () => {
 });
 vi.mock("@/lib/wishlist", async () => {
   const actual = await vi.importActual<typeof import("@/lib/wishlist")>("@/lib/wishlist");
-  return { WishlistError: actual.WishlistError, addWishlistItem: m.addWishlistItem, removeWishlistItem: m.removeWishlistItem };
+  return {
+    WishlistError: actual.WishlistError,
+    addWishlistItem: m.addWishlistItem,
+    removeWishlistItem: m.removeWishlistItem,
+    claimAnonymousItems: m.claimAnonymousItems,
+  };
 });
 
 import { ProductError } from "@/lib/products";
 import { WishlistError } from "@/lib/wishlist";
-import { addToWishlistAction, removeFromWishlistAction } from "./actions";
+import { addToWishlistAction, claimAnonymousWishlistAction, removeFromWishlistAction } from "./actions";
 
 const PRODUCT_ID = "65f0c0ffee0000000000beef";
 const ITEM_ID = "65f0c0ffee0000000000abcd";
@@ -43,6 +51,8 @@ describe("wishlist actions", () => {
     m.getProduct.mockResolvedValue({ id: PRODUCT_ID, isActive: true });
     m.addWishlistItem.mockResolvedValue({ id: ITEM_ID });
     m.removeWishlistItem.mockResolvedValue(true);
+    m.claimAnonymousItems.mockResolvedValue(2);
+    m.clearAnonymousId.mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
@@ -140,6 +150,51 @@ describe("wishlist actions", () => {
     it("shows the friendly message when removing fails", async () => {
       m.removeWishlistItem.mockRejectedValue(new WishlistError("DB_ERROR", "Something went wrong with your wishlist."));
       await expect(removeFromWishlistAction(ITEM_ID)).resolves.toEqual({ error: "Something went wrong with your wishlist." });
+    });
+  });
+
+  describe("claimAnonymousWishlistAction", () => {
+    it("moves the items saved while signed out into the account, then deletes the cookie", async () => {
+      m.auth.mockResolvedValue({ userId: "user_123" });
+      await expect(claimAnonymousWishlistAction()).resolves.toEqual({ moved: 2, error: null });
+      expect(m.claimAnonymousItems).toHaveBeenCalledWith(ANON, "user_123"); // cookie id + session user
+      expect(m.clearAnonymousId).toHaveBeenCalled();
+      expect(m.claimAnonymousItems.mock.invocationCallOrder[0]).toBeLessThan(m.clearAnonymousId.mock.invocationCallOrder[0]);
+      expect(m.revalidatePath).toHaveBeenCalledWith("/wishlist");
+    });
+
+    it("does nothing when signed out", async () => {
+      await expect(claimAnonymousWishlistAction()).resolves.toEqual({ moved: 0, error: null });
+      expect(m.getAnonymousId).not.toHaveBeenCalled();
+      expect(m.claimAnonymousItems).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when there's no anonymous cookie (nothing was saved signed out)", async () => {
+      m.auth.mockResolvedValue({ userId: "user_123" });
+      m.getAnonymousId.mockResolvedValue(null);
+      await expect(claimAnonymousWishlistAction()).resolves.toEqual({ moved: 0, error: null });
+      expect(m.claimAnonymousItems).not.toHaveBeenCalled();
+      expect(m.clearAnonymousId).not.toHaveBeenCalled();
+    });
+
+    it("hides unexpected errors (e.g. Clerk failing) behind a generic message and logs them", async () => {
+      const bug = new Error("clerk down");
+      m.auth.mockRejectedValue(bug);
+      await expect(claimAnonymousWishlistAction()).resolves.toEqual({
+        moved: 0,
+        error: "Something went wrong. Please try again.",
+      });
+      expect(console.error).toHaveBeenCalledWith("[wishlist] Unexpected error:", bug);
+    });
+
+    it("keeps the cookie when the move fails, so the items can be claimed next time", async () => {
+      m.auth.mockResolvedValue({ userId: "user_123" });
+      m.claimAnonymousItems.mockRejectedValue(new WishlistError("DB_ERROR", "Something went wrong with your wishlist."));
+      await expect(claimAnonymousWishlistAction()).resolves.toEqual({
+        moved: 0,
+        error: "Something went wrong with your wishlist.",
+      });
+      expect(m.clearAnonymousId).not.toHaveBeenCalled();
     });
   });
 });
