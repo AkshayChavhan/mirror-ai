@@ -107,7 +107,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
 | ✅ | 53 | `53_tidy_docs` | Add phase 2 tasks 30–54 to this list; remove stale blocker notes; fix the out-of-date line in `CLAUDE.md` | None (docs) |
-| ❌ | 54 | `54_reviewer_page_auth_check` | rules-reviewer check that every protected page calls `requireUser()` / `requireAdmin()` (approved) | Planted unprotected page is flagged |
+| ✅ | 54 | `54_reviewer_page_auth_check` | rules-reviewer check that every protected page calls `requireUser()` / `requireAdmin()` (approved) | Planted unprotected page is flagged |
 
 ## Blockers
 
