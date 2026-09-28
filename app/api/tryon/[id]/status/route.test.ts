@@ -14,7 +14,12 @@ import { TryOnRecordError } from "@/lib/tryons";
 import { GET } from "./route";
 
 const ID = "65f0c0ffee0000000000abcd";
-const DONE = { status: "DONE", resultUrl: "https://res.cloudinary.com/demo/r.png", errorMessage: null };
+const DONE = {
+  status: "DONE",
+  resultUrl: "https://res.cloudinary.com/demo/r.png",
+  errorMessage: null,
+  shareId: "Zm9vYmFyYmF6cXV4MTIzNA", // the owner gets the share token for the result link (task 56)
+};
 
 function call(id = ID) {
   return GET(new NextRequest(`http://localhost:3000/api/tryon/${id}/status`), { params: Promise.resolve({ id }) });

@@ -14,6 +14,7 @@ import {
   createTryOn,
   deleteTryOns,
   failTryOn,
+  getSharedTryOn,
   getTryOnStatus,
   listExpiredTryOns,
   listRecentTryOns,
@@ -53,10 +54,22 @@ describe("lib/tryons", () => {
   });
 
   describe("createTryOn", () => {
-    it("saves the try-on as PENDING", async () => {
+    it("saves the try-on as PENDING, with a random share token for its public link", async () => {
       tryOn.create.mockResolvedValue({ id: ID, ...VALID, status: "PENDING" });
       await expect(createTryOn(VALID)).resolves.toMatchObject({ id: ID, status: "PENDING" });
-      expect(tryOn.create).toHaveBeenCalledWith({ data: { ...VALID, status: "PENDING" } });
+      expect(tryOn.create).toHaveBeenCalledWith({
+        data: { ...VALID, status: "PENDING", shareId: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/) },
+      });
+    });
+
+    it("gives every try-on a different share token (128 random bits, never the ObjectId)", async () => {
+      tryOn.create.mockResolvedValue({ id: ID });
+      await createTryOn(VALID);
+      await createTryOn(VALID);
+      const [first, second] = tryOn.create.mock.calls.map(([args]) => args.data.shareId as string);
+      expect(first).not.toBe(second);
+      expect(Buffer.from(first, "base64url")).toHaveLength(16);
+      expect(first).not.toMatch(/^[a-f0-9]{24}$/i);
     });
 
     it.each([
@@ -187,7 +200,7 @@ describe("lib/tryons", () => {
       await expect(getTryOnStatus(ID, "user_123")).resolves.toEqual(view);
       expect(tryOn.findFirst).toHaveBeenCalledWith({
         where: { id: ID, userId: "user_123", createdAt: { gt: new Date("2026-09-27T12:00:00Z") } },
-        select: { status: true, resultUrl: true, errorMessage: true },
+        select: { status: true, resultUrl: true, errorMessage: true, shareId: true },
       });
       expect(TRYON_TTL_MS).toBe(86_400_000);
     });
@@ -284,6 +297,42 @@ describe("lib/tryons", () => {
     it("turns database errors into DB_ERROR", async () => {
       tryOn.deleteMany.mockRejectedValue(new Error("timeout"));
       expect((await recordError(deleteTryOns([ID]))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("getSharedTryOn", () => {
+    const SHARE = "Zm9vYmFyYmF6cXV4MTIzNA"; // 22 base64url characters
+    afterEach(() => vi.useRealTimers());
+
+    it("finds the try-on by its share token (last 24 h) with only what the public page may show", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-28T12:00:00Z"));
+      tryOn.findFirst.mockResolvedValue({ status: "DONE" });
+      await expect(getSharedTryOn(SHARE)).resolves.toEqual({ status: "DONE" });
+      expect(tryOn.findFirst).toHaveBeenCalledWith({
+        where: { shareId: SHARE, createdAt: { gt: new Date("2026-09-27T12:00:00Z") } },
+        select: { status: true, personUrl: true, resultUrl: true, createdAt: true, product: { select: { name: true } } },
+      });
+    });
+
+    it.each([
+      ["an ObjectId (so ids from other links can't be used)", ID],
+      ["a too-short token", "abc"],
+      ["a token with other characters", "Zm9vYmFyYmF6cXV4MTIz/A"],
+      ["an empty string", ""],
+    ])("returns null for %s without touching the database", async (_case, value) => {
+      await expect(getSharedTryOn(value)).resolves.toBeNull();
+      expect(tryOn.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("returns null when no try-on has that token (or it's older than 24 h)", async () => {
+      tryOn.findFirst.mockResolvedValue(null);
+      await expect(getSharedTryOn(SHARE)).resolves.toBeNull();
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      tryOn.findFirst.mockRejectedValue(new Error("timeout"));
+      expect((await recordError(getSharedTryOn(SHARE))).code).toBe("DB_ERROR");
     });
   });
 });
