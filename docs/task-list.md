@@ -88,7 +88,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 |---|---|---|---|---|
 | ✅ | 46 | `46_add_history_page` | `/history`: the last 24 h of try-ons (`requireUser`) | Unit + E2E incl. signed-out redirect |
 | ✅ | 47 | `47_add_wishlist_cookie` | Anonymous-id cookie for signed-out visitors | Unit |
-| ❌ | 48 | `48_add_wishlist_actions` | Add to / remove from the wishlist | Unit (Prisma mocked) |
+| ✅ | 48 | `48_add_wishlist_actions` | Add to / remove from the wishlist | Unit (Prisma mocked) |
 | ❌ | 49 | `49_add_wishlist_page` | `/wishlist` page (public) | Unit + E2E |
 | ❌ | 50 | `50_add_wishlist_merge_on_sign_in` | Move anonymous items to the account on sign-in | Unit |
 
@@ -100,6 +100,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ❌ | 52 | `52_add_tryon_rate_limit` | Per-user try-on limit | Unit: under/at/over the limit |
 | ❌ | 55 | `55_cleanup_images_on_product_delete` | Deleting a product also deletes its Cloudinary images: the garment image, **and** the `personUrl`/`resultUrl` of its try-ons (their rows cascade-delete, so the 24 h cron could never find them). Reuses `deleteImage()` (task 38). **Must be done before task 41**, the first page that lets users create try-ons. Added by task 38, waiting for the developer's OK | Unit (mocks): images deleted before the rows; a failed image delete is logged |
 | ❌ | 56 | `56_add_tryon_share_token` | Give each `TryOn` a random, unguessable share token (e.g. `shareId`, 128-bit, unique) and use it in the public `/tryon/[id]` link instead of the ObjectId. ObjectIds are a timestamp, a per-process value and a counter, so they can be guessed from one shared link. Fix the "random ObjectIds" line in `docs/project-plan.md`. **Must be done before task 44.** Added by task 38's review, waiting for the developer's OK | Unit: token is random and unique; the page looks up by token, and an ObjectId doesn't work |
+| ❌ | 57 | `57_add_wishlist_item_limit` | Cap how many wishlist items one owner (user or anonymous id) can have, e.g. N items, with a friendly message when full. Anonymous visitors could otherwise add rows without limit. Suggested by task 48's review, waiting for the developer's OK (and the number) | Unit: under/at/over the cap |
 
 ### Group H: Housekeeping
 
@@ -116,6 +117,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 - **41:** waits for 55, so no user can create a try-on whose photo a product delete would leave behind forever.
 - **56:** a new task (added in task 38's review), so it needs the developer's OK before its branch is created.
 - **44:** waits for 56, so public result links can't be guessed.
+- **57:** a new task (added in task 48's review): needs the developer's OK and the item limit.
 - **42, 43:** build on the `/tryon` page (41). **45:** builds on the result page (44). They follow those tasks.
 
 ## Later (not yet split into tasks)
