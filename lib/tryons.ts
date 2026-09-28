@@ -152,3 +152,36 @@ export async function getTryOnStatus(id: string, userId: string): Promise<TryOnS
     }),
   );
 }
+
+/** One row of the /history page: only what it shows. */
+export type RecentTryOn = {
+  id: string;
+  status: TryOnStatus;
+  resultUrl: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+  product: { name: string };
+};
+
+/** At most this many rows on /history (a safety cap; the 24 h window keeps the list short anyway). */
+const RECENT_LIMIT = 50;
+
+/** The user's try-ons from the last 24 h, newest first. Older ones stay hidden even if the cleanup runs late. */
+export async function listRecentTryOns(userId: string): Promise<RecentTryOn[]> {
+  if (!userId) return [];
+  return db("listRecentTryOns", () =>
+    prisma.tryOn.findMany({
+      where: { userId, createdAt: { gt: new Date(Date.now() - TRYON_TTL_MS) } },
+      orderBy: { createdAt: "desc" },
+      take: RECENT_LIMIT,
+      select: {
+        id: true,
+        status: true,
+        resultUrl: true,
+        errorMessage: true,
+        createdAt: true,
+        product: { select: { name: true } },
+      },
+    }),
+  );
+}

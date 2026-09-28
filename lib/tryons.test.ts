@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the database client: no MongoDB needed.
-const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() } }));
+const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() } }));
 vi.mock("./prisma", () => ({ prisma: { tryOn } }));
 
 import {
@@ -14,6 +14,7 @@ import {
   createTryOn,
   failTryOn,
   getTryOnStatus,
+  listRecentTryOns,
   type NewTryOn,
 } from "./tryons";
 
@@ -45,6 +46,7 @@ describe("lib/tryons", () => {
     tryOn.update.mockReset();
     tryOn.updateMany.mockReset();
     tryOn.findFirst.mockReset();
+    tryOn.findMany.mockReset();
   });
 
   describe("createTryOn", () => {
@@ -203,6 +205,41 @@ describe("lib/tryons", () => {
     it("turns database errors into DB_ERROR", async () => {
       tryOn.findFirst.mockRejectedValue(new Error("timeout"));
       expect((await recordError(getTryOnStatus(ID, "user_123"))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("listRecentTryOns", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("lists the user's try-ons from the last 24 h, newest first, with only what /history shows", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-09-28T12:00:00Z"));
+      tryOn.findMany.mockResolvedValue([{ id: ID }]);
+
+      await expect(listRecentTryOns("user_123")).resolves.toEqual([{ id: ID }]);
+      expect(tryOn.findMany).toHaveBeenCalledWith({
+        where: { userId: "user_123", createdAt: { gt: new Date("2026-09-27T12:00:00Z") } },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true,
+          status: true,
+          resultUrl: true,
+          errorMessage: true,
+          createdAt: true,
+          product: { select: { name: true } },
+        },
+      });
+    });
+
+    it("returns nothing for an empty user id without touching the database", async () => {
+      await expect(listRecentTryOns("")).resolves.toEqual([]);
+      expect(tryOn.findMany).not.toHaveBeenCalled();
+    });
+
+    it("turns database errors into DB_ERROR", async () => {
+      tryOn.findMany.mockRejectedValue(new Error("timeout"));
+      expect((await recordError(listRecentTryOns("user_123"))).code).toBe("DB_ERROR");
     });
   });
 });
