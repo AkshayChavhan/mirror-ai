@@ -89,7 +89,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ✅ | 46 | `46_add_history_page` | `/history`: the last 24 h of try-ons (`requireUser`) | Unit + E2E incl. signed-out redirect |
 | ✅ | 47 | `47_add_wishlist_cookie` | Anonymous-id cookie for signed-out visitors | Unit |
 | ✅ | 48 | `48_add_wishlist_actions` | Add to / remove from the wishlist | Unit (Prisma mocked) |
-| ❌ | 49 | `49_add_wishlist_page` | `/wishlist` page (public) | Unit + E2E |
+| ✅ | 49 | `49_add_wishlist_page` | `/wishlist` page (public) | Unit + E2E |
 | ❌ | 50 | `50_add_wishlist_merge_on_sign_in` | Move anonymous items to the account on sign-in | Unit |
 
 ### Group G: Privacy and limits

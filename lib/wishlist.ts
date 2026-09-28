@@ -62,3 +62,30 @@ export async function removeWishlistItem(owner: WishlistOwner, itemId: string): 
   );
   return count > 0;
 }
+
+/** One saved item on /wishlist: only what the page shows. */
+export type WishlistEntry = {
+  id: string;
+  createdAt: Date;
+  product: { id: string; name: string; imageUrl: string; price: number | null; buyLink: string | null };
+};
+
+/** At most this many items on /wishlist (a safety cap until task 57 limits how many can be saved). */
+const LIST_LIMIT = 100;
+
+/** The owner's saved items, newest first, for garments still shown to shoppers (hidden ones drop out). */
+export async function listWishlist(owner: WishlistOwner): Promise<WishlistEntry[]> {
+  const fields = ownerFields(owner);
+  return db("listWishlist", () =>
+    prisma.wishlistItem.findMany({
+      where: { ...fields, product: { isActive: true } },
+      orderBy: { createdAt: "desc" },
+      take: LIST_LIMIT,
+      select: {
+        id: true,
+        createdAt: true,
+        product: { select: { id: true, name: true, imageUrl: true, price: true, buyLink: true } },
+      },
+    }),
+  );
+}

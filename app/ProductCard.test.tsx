@@ -1,6 +1,13 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
+// The Save button is tested in SaveButton.test.tsx; here we only check the card places it.
+vi.mock("./SaveButton", () => ({
+  default: ({ productId, name }: { productId: string; name: string }) => (
+    <span data-testid="save">{`${productId}:${name}`}</span>
+  ),
+}));
+
 import ProductCard from "./ProductCard";
 
 type CardProduct = ComponentProps<typeof ProductCard>["product"];
@@ -70,5 +77,10 @@ describe("ProductCard", () => {
   it("has no Buy link without a buyLink", () => {
     renderCard({ buyLink: null });
     expect(screen.queryByRole("link", { name: /^Buy/ })).not.toBeInTheDocument();
+  });
+
+  it("has a Save to wishlist button for this product", () => {
+    renderCard();
+    expect(screen.getByTestId("save")).toHaveTextContent("65f0c0ffee0000000000abcd:Linen Shirt");
   });
 });
