@@ -86,7 +86,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
-| ❌ | 46 | `46_add_history_page` | `/history`: the last 24 h of try-ons (`requireUser`) | Unit + E2E incl. signed-out redirect |
+| ✅ | 46 | `46_add_history_page` | `/history`: the last 24 h of try-ons (`requireUser`) | Unit + E2E incl. signed-out redirect |
 | ❌ | 47 | `47_add_wishlist_cookie` | Anonymous-id cookie for signed-out visitors | Unit |
 | ❌ | 48 | `48_add_wishlist_actions` | Add to / remove from the wishlist | Unit (Prisma mocked) |
 | ❌ | 49 | `49_add_wishlist_page` | `/wishlist` page (public) | Unit + E2E |
@@ -116,6 +116,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 - **41:** waits for 55, so no user can create a try-on whose photo a product delete would leave behind forever.
 - **56:** a new task (added in task 38's review), so it needs the developer's OK before its branch is created.
 - **44:** waits for 56, so public result links can't be guessed.
+- **42, 43:** build on the `/tryon` page (41). **45:** builds on the result page (44). They follow those tasks.
 
 ## Later (not yet split into tasks)
 
