@@ -26,6 +26,8 @@ jobs:
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      # A throwaway MongoDB started below (task 60). Playwright seeds it and the app uses it during E2E.
+      E2E_DATABASE_URL: mongodb://localhost:27017/mirror-ai-e2e?replicaSet=rs0&directConnection=true
     steps:
       - name: Check out code
         uses: actions/checkout@v7
@@ -50,6 +52,21 @@ jobs:
 
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
+
+      # Prisma needs MongoDB to run as a replica set, so start a one-node set and wait until it's primary.
+      - name: Start a test MongoDB (replica set)
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:7.0 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' && break; sleep 1; done
+          docker exec mongo mongosh --quiet --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "localhost:27017" }] })'
+          for i in $(seq 1 30); do docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true && break; sleep 1; done
+          # Fail here, clearly, if it never became primary (instead of a timeout in the next step).
+          docker exec mongo mongosh --quiet --eval 'if (!db.hello().isWritablePrimary) quit(1)'
+
+      - name: Create the test database's collections and indexes
+        run: npm run db:push
+        env:
+          DATABASE_URL: ${{ env.E2E_DATABASE_URL }}
 
       # Playwright's webServer runs `npm run build`, so this step also checks the build.
       - name: E2E tests (Playwright)
