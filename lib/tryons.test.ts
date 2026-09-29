@@ -7,6 +7,8 @@ const { tryOn } = vi.hoisted(() => ({ tryOn: { create: vi.fn(), update: vi.fn(),
 vi.mock("./prisma", () => ({ prisma: { tryOn } }));
 
 import {
+  TRYON_LIMIT,
+  TRYON_LIMIT_WINDOW_MS,
   TRYON_TTL_MS,
   TryOnRecordError,
   claimTryOn,
@@ -16,8 +18,10 @@ import {
   failTryOn,
   getSharedTryOn,
   getTryOnStatus,
+  isOverTryOnLimit,
   listExpiredTryOns,
   listRecentTryOns,
+  nextTryOnAllowedAt,
   type NewTryOn,
 } from "./tryons";
 
@@ -256,6 +260,61 @@ describe("lib/tryons", () => {
     it("turns database errors into DB_ERROR", async () => {
       tryOn.findMany.mockRejectedValue(new Error("timeout"));
       expect((await recordError(listRecentTryOns("user_123"))).code).toBe("DB_ERROR");
+    });
+  });
+
+  describe("the try-on limit (task 52)", () => {
+    const NOW = new Date("2026-09-29T12:00:00Z");
+    const minutesAgo = (m: number) => ({ createdAt: new Date(NOW.getTime() - m * 60_000) });
+
+    it("is 3 per rolling hour", () => {
+      expect(TRYON_LIMIT).toBe(3);
+      expect(TRYON_LIMIT_WINDOW_MS).toBe(60 * 60 * 1000);
+    });
+
+    it("counts only the user's try-ons from the last hour that didn't fail, newest first", async () => {
+      tryOn.findMany.mockResolvedValue([]);
+      await nextTryOnAllowedAt("user_123", NOW);
+      expect(tryOn.findMany).toHaveBeenCalledWith({
+        where: { userId: "user_123", status: { not: "FAILED" }, createdAt: { gt: new Date("2026-09-29T11:00:00Z") } },
+        orderBy: { createdAt: "desc" },
+        take: 4,
+        select: { createdAt: true },
+      });
+    });
+
+    it("under the limit (2 this hour): may start one now", async () => {
+      tryOn.findMany.mockResolvedValue([minutesAgo(5), minutesAgo(40)]);
+      await expect(nextTryOnAllowedAt("user_123", NOW)).resolves.toBeNull();
+    });
+
+    it("at the limit (3 this hour): may start again when the oldest of the 3 is an hour old", async () => {
+      tryOn.findMany.mockResolvedValue([minutesAgo(5), minutesAgo(20), minutesAgo(48)]);
+      await expect(nextTryOnAllowedAt("user_123", NOW)).resolves.toEqual(new Date("2026-09-29T12:12:00Z"));
+    });
+
+    it("over the limit (4, after a race): still counts from the 3rd newest", async () => {
+      tryOn.findMany.mockResolvedValue([minutesAgo(1), minutesAgo(2), minutesAgo(30), minutesAgo(50)]);
+      await expect(nextTryOnAllowedAt("user_123", NOW)).resolves.toEqual(new Date("2026-09-29T12:30:00Z"));
+    });
+
+    it.each([
+      [3, false],
+      [4, true],
+    ])("after saving, with %i counted this hour, isOverTryOnLimit is %s", async (count, over) => {
+      tryOn.findMany.mockResolvedValue(Array.from({ length: count }, (_, i) => minutesAgo(i)));
+      await expect(isOverTryOnLimit("user_123", NOW)).resolves.toBe(over);
+    });
+
+    it("rejects an empty user id without touching the database", async () => {
+      expect((await recordError(nextTryOnAllowedAt("", NOW))).code).toBe("INVALID_INPUT");
+      expect(tryOn.findMany).not.toHaveBeenCalled();
+    });
+
+    it("turns database errors into DB_ERROR (logged)", async () => {
+      tryOn.findMany.mockRejectedValue(new Error("timeout"));
+      expect((await recordError(isOverTryOnLimit("user_123", NOW))).code).toBe("DB_ERROR");
+      expect(console.error).toHaveBeenCalledWith("[tryons] isOverTryOnLimit failed:", expect.any(Error));
     });
   });
 

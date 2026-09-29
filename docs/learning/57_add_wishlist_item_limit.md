@@ -38,7 +38,7 @@ cat lib/wishlist.ts app/wishlist/actions.ts app/SaveButton.tsx
 - `deleteMany` rather than `delete`: if the item were already gone (removed in another tab), `delete` would throw "not found".
 - **The message** is thrown *after* `db()`, because `db()` turns every error inside it into `DB_ERROR`. It reads: *"Your wishlist is full (100 items). Remove some to save more."* The Save button shows it, and it isn't logged as an error, because it isn't one.
 - **Only visible garments count, just like `/wishlist`.** If an item for a hidden garment counted, the list could say "full" while showing 97 items, and the owner couldn't remove the 3 they can't see.
-- **After sign-in, moving the signed-out items to the account (task 50) keeps them all.** Nothing a person saved is dropped. That's Claude's choice, and the developer was asked to confirm it.
+- **After sign-in, moving the signed-out items to the account (task 50) keeps them all.** Nothing a person saved is dropped. That was Claude's choice, and the developer confirmed it on 2026-09-29 (recorded in task 52's branch).
   - One move into an account at or under 100 reaches at most 200.
   - The page's display cap **`LIST_LIMIT`** is now `2 × WISHLIST_ITEM_LIMIT` (200), so after one move every item shows and can be removed.
   - Only repeated moves (sign out, save 100, sign in, again) go further. Then the page shows the newest 200, and older ones appear as newer ones are removed.
