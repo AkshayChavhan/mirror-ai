@@ -96,6 +96,46 @@ export async function deleteImage(publicId: string): Promise<boolean> {
   }
 }
 
+/** An image stored in Cloudinary, as the Admin API lists it. `createdAt` is its upload time (ISO 8601). */
+export type StoredImage = { publicId: string; createdAt: string };
+export type ImagePage = { images: StoredImage[]; nextCursor: string | null };
+
+/** The most images one Admin API page can return. */
+const PAGE_SIZE = 500;
+
+/** The fields we use from one listed image, or null if they're missing. */
+function toStoredImage(resource: unknown): StoredImage | null {
+  if (typeof resource !== "object" || resource === null) return null;
+  const publicId = "public_id" in resource ? resource.public_id : null;
+  const createdAt = "created_at" in resource ? resource.created_at : null;
+  return typeof publicId === "string" && typeof createdAt === "string" ? { publicId, createdAt } : null;
+}
+
+/**
+ * One page of the uploaded images whose public id starts with `prefix` (Admin API, which has an hourly
+ * rate limit). Pages come in public id order, not by date; pass `nextCursor` to get the next one.
+ * Throws when Cloudinary isn't configured, the call fails, or the reply isn't a list. The caller logs it.
+ */
+export async function listImages(prefix: string, cursor?: string): Promise<ImagePage> {
+  configure();
+  const response: unknown = await cloudinary.api.resources({
+    type: "upload",
+    resource_type: "image",
+    prefix,
+    max_results: PAGE_SIZE,
+    ...(cursor ? { next_cursor: cursor } : {}),
+  });
+  if (typeof response !== "object" || response === null || !("resources" in response) || !Array.isArray(response.resources)) {
+    throw new Error("Cloudinary returned something other than an image list.");
+  }
+  const resources: unknown[] = response.resources;
+  const nextCursor = "next_cursor" in response && typeof response.next_cursor === "string" ? response.next_cursor : "";
+  return {
+    images: resources.map(toStoredImage).filter((image): image is StoredImage => image !== null),
+    nextCursor: nextCursor || null,
+  };
+}
+
 /**
  * The public id inside a Cloudinary image URL as uploadImage stores it
  * (https://res.cloudinary.com/<cloud>/image/upload/[v123/]<publicId>.<ext>), or null if it isn't one.

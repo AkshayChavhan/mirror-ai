@@ -49,7 +49,8 @@ export async function processTryOn(tryOnId: string, step: StepRunner): Promise<T
   }
 
   // 3. Copy the result to Cloudinary (the Space's URL is temporary) and mark DONE in ONE step, so a
-  //    result image is never left without a row pointing at it (the 24 h cleanup finds images via rows).
+  //    result image is never left without a row pointing at it (the 24 h cleanup finds images via rows;
+  //    the folder sweep only catches strays after 25 h).
   const saved = await step.run("save-result", async () => {
     const uploaded = await uploadImage(model.resultImageUrl, RESULTS_FOLDER);
     let completed: boolean;

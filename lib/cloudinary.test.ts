@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the Cloudinary SDK: unit tests never call the real service or use real keys.
-const { upload, destroy, config } = vi.hoisted(() => ({ upload: vi.fn(), destroy: vi.fn(), config: vi.fn() }));
-vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload, destroy } } }));
+const { upload, destroy, resources, config } = vi.hoisted(() => ({
+  upload: vi.fn(),
+  destroy: vi.fn(),
+  resources: vi.fn(),
+  config: vi.fn(),
+}));
+vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload, destroy }, api: { resources } } }));
 
-import { ImageUploadError, deleteImage, downloadUrl, publicIdFromUrl, uploadImage } from "./cloudinary";
+import { ImageUploadError, deleteImage, downloadUrl, listImages, publicIdFromUrl, uploadImage } from "./cloudinary";
 
 const FILE = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -131,6 +136,61 @@ describe("deleteImage", () => {
   it("returns false for an empty public id", async () => {
     await expect(deleteImage("  ")).resolves.toBe(false);
     expect(destroy).not.toHaveBeenCalled();
+  });
+});
+
+describe("listImages", () => {
+  const PREFIX = "mirror-ai/people/";
+  const listed = (publicId: string) => ({ public_id: publicId, created_at: "2026-09-28T10:00:00Z", bytes: 1234 });
+
+  beforeEach(() => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "<test-cloud>");
+    vi.stubEnv("CLOUDINARY_API_KEY", "<test-key>");
+    vi.stubEnv("CLOUDINARY_API_SECRET", "<test-secret>");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    resources.mockReset();
+    config.mockReset();
+  });
+
+  it("lists one page (up to 500) of the uploaded images under a folder, with their upload times", async () => {
+    resources.mockResolvedValue({ resources: [listed("mirror-ai/people/a")], next_cursor: "cursor-2" });
+    await expect(listImages(PREFIX)).resolves.toEqual({
+      images: [{ publicId: "mirror-ai/people/a", createdAt: "2026-09-28T10:00:00Z" }],
+      nextCursor: "cursor-2",
+    });
+    expect(resources).toHaveBeenCalledWith({ type: "upload", resource_type: "image", prefix: PREFIX, max_results: 500 });
+  });
+
+  it("asks for the next page with the cursor, and says when there is none", async () => {
+    resources.mockResolvedValue({ resources: [listed("mirror-ai/people/b")] });
+    await expect(listImages(PREFIX, "cursor-2")).resolves.toMatchObject({ nextCursor: null });
+    expect(resources).toHaveBeenCalledWith(expect.objectContaining({ next_cursor: "cursor-2" }));
+  });
+
+  it("skips listed items without a public id or an upload time", async () => {
+    resources.mockResolvedValue({ resources: [listed("mirror-ai/people/c"), { public_id: "x" }, null, { created_at: "2026" }] });
+    await expect(listImages(PREFIX)).resolves.toMatchObject({ images: [{ publicId: "mirror-ai/people/c" }] });
+  });
+
+  it("throws when the reply isn't an image list", async () => {
+    resources.mockResolvedValue({ error: { message: "odd" } });
+    await expect(listImages(PREFIX)).rejects.toThrow("something other than an image list");
+  });
+
+  it("throws, without calling Cloudinary, when env vars are missing", async () => {
+    vi.stubEnv("CLOUDINARY_API_SECRET", "");
+    await expect(listImages(PREFIX)).rejects.toBeInstanceOf(ImageUploadError);
+    expect(resources).not.toHaveBeenCalled();
+  });
+
+  it("lets a provider error through, for the caller to log", async () => {
+    resources.mockRejectedValue({ message: "Rate Limit Exceeded", http_code: 420 });
+    await expect(listImages(PREFIX)).rejects.toEqual({ message: "Rate Limit Exceeded", http_code: 420 });
   });
 });
 
