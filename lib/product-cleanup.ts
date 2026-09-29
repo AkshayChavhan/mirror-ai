@@ -4,7 +4,8 @@ import { ProductError, deleteProduct } from "./products";
 
 // Server-only: deleting a product WITH its Cloudinary images. Deleting the row alone would cascade-delete its
 // try-ons (prisma/schema.prisma, onDelete: Cascade), and their person photos and results would stay on
-// Cloudinary forever, because the 24 h cleanup (lib/cleanup-job.ts) finds photos only through try-on rows.
+// Cloudinary until the hourly folder sweep (lib/cleanup-job.ts, task 61) caught them a day later. The
+// row cleanup finds photos only through try-on rows.
 
 const TRYON_FOLDERS = ["mirror-ai/people/", "mirror-ai/results/"];
 const GARMENT_FOLDER = "mirror-ai/garments/";

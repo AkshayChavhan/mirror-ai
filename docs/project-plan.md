@@ -125,6 +125,7 @@ Risks:
 
 - **Person photos and results are auto-deleted after 24 hours** by a cron job.
 - **Confirmed:** the cron deletes the Cloudinary images (`personUrl`, `resultUrl`) **and** the `TryOn` row itself, so nothing about the attempt is kept. `/history` then naturally shows only the last 24 hours. It will still filter on `createdAt > now − 24 h`, in case the cron runs late.
+- **Safety net (task 61):** the same hourly job also sweeps the try-on folders (`mirror-ai/people/`, `mirror-ai/results/`) by upload time and deletes any image older than 25 h, including images no row points at (e.g. after a failed best-effort delete). Garment images are never touched.
 
 ## Try-on job lifecycle
 
