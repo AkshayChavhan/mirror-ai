@@ -243,6 +243,7 @@ describe("lib/tryons", () => {
         take: 50,
         select: {
           id: true,
+          shareId: true, // for the "View and share" link (task 63)
           status: true,
           resultUrl: true,
           errorMessage: true,

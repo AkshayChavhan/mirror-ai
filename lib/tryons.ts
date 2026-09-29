@@ -207,9 +207,10 @@ export async function getTryOnStatus(id: string, userId: string): Promise<TryOnS
   );
 }
 
-/** One row of the /history page: only what it shows. */
+/** One row of the /history page: only what it shows, plus the share token for its "View and share" link. */
 export type RecentTryOn = {
   id: string;
+  shareId: string;
   status: TryOnStatus;
   resultUrl: string | null;
   errorMessage: string | null;
@@ -230,6 +231,7 @@ export async function listRecentTryOns(userId: string): Promise<RecentTryOn[]> {
       take: RECENT_LIMIT,
       select: {
         id: true,
+        shareId: true,
         status: true,
         resultUrl: true,
         errorMessage: true,

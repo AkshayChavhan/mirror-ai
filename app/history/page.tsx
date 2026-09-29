@@ -45,6 +45,17 @@ function TryOnItem({ tryOn, now }: { tryOn: RecentTryOn; now: Date }) {
       <time dateTime={tryOn.createdAt.toISOString()} className="text-sm text-zinc-600 dark:text-zinc-400">
         {timeAgo(tryOn.createdAt, now)}
       </time>
+      {status === "DONE" && tryOn.resultUrl && (
+        // The public result page (task 44), with the slider, download and WhatsApp share (task 45).
+        <Link
+          href={`/tryon/${tryOn.shareId}`}
+          // Usually unique per item (the same garment twice usually differs by time); starts with the visible text.
+          aria-label={`View and share your ${product.name} try-on from ${timeAgo(tryOn.createdAt, now)}`}
+          className="text-sm underline"
+        >
+          View and share
+        </Link>
+      )}
     </li>
   );
 }

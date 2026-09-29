@@ -11,6 +11,7 @@ import HistoryPage from "./page";
 const NOW = new Date("2026-09-28T12:00:00Z");
 const tryOn = (over: Record<string, unknown>) => ({
   id: "65f0c0ffee0000000000abcd",
+  shareId: "Zm9vYmFyYmF6cXV4MTIzNA",
   status: "DONE",
   resultUrl: "https://res.cloudinary.com/demo/image/upload/mirror-ai/results/r.png",
   errorMessage: null,
@@ -58,6 +59,14 @@ describe("/history", () => {
     expect(within(item).getByText("5 min ago")).toHaveAttribute("datetime", "2026-09-28T11:55:00.000Z");
   });
 
+  it("links a finished try-on to its public result page, to view and share it (task 63)", async () => {
+    listRecentTryOns.mockResolvedValue([tryOn({})]);
+    const region = await renderPage();
+    const link = within(region).getByRole("link", { name: "View and share your Linen Shirt try-on from 5 min ago" });
+    expect(link).toHaveAttribute("href", "/tryon/Zm9vYmFyYmF6cXV4MTIzNA"); // the share token, never the id
+    expect(link).toHaveTextContent("View and share");
+  });
+
   it("loads the photo straight from Cloudinary, never through Next's image cache (it can't be deleted)", async () => {
     listRecentTryOns.mockResolvedValue([tryOn({})]);
     const region = await renderPage();
@@ -72,22 +81,44 @@ describe("/history", () => {
     ["FAILED", "Try-on is busy right now. Please try again later.", "Try-on is busy right now. Please try again later."],
     ["FAILED", null, "This try-on didn't work."],
     ["DONE", null, "Your try-on is ready."], // DONE without a result image (shouldn't happen)
-  ])("shows %s (message %j) as text instead of an image", async (status, errorMessage, text) => {
+  ])("shows %s (message %j) as text instead of an image, with no share link", async (status, errorMessage, text) => {
     listRecentTryOns.mockResolvedValue([tryOn({ status, errorMessage, resultUrl: null })]);
     const region = await renderPage();
     expect(within(region).getByText(text)).toBeInTheDocument();
     expect(within(region).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(region).queryByRole("link", { name: /view and share/i })).not.toBeInTheDocument();
   });
 
   it("lists try-ons in the order it gets them (newest first)", async () => {
     listRecentTryOns.mockResolvedValue([
-      tryOn({ id: "65f0c0ffee0000000000aaa1", product: { name: "Newer" } }),
-      tryOn({ id: "65f0c0ffee0000000000aaa2", product: { name: "Older" }, createdAt: new Date(NOW.getTime() - 3 * 3_600_000) }),
+      tryOn({ id: "65f0c0ffee0000000000aaa1", shareId: "TmV3ZXJUcnlPblRva2VuMQ", product: { name: "Newer" } }),
+      tryOn({
+        id: "65f0c0ffee0000000000aaa2",
+        shareId: "T2xkZXJUcnlPblRva2VuMg",
+        product: { name: "Older" },
+        createdAt: new Date(NOW.getTime() - 3 * 3_600_000),
+      }),
     ]);
     const region = await renderPage();
     const names = within(region).getAllByRole("heading").map((h) => h.textContent);
     expect(names).toEqual(["Newer", "Older"]);
     expect(within(region).getByText("3 h ago")).toBeInTheDocument();
+  });
+
+  it("names each share link after its garment and time, so two try-ons of one garment can be told apart", async () => {
+    listRecentTryOns.mockResolvedValue([
+      tryOn({ id: "65f0c0ffee0000000000aaa1", shareId: "Rmlyc3RMaW5lblNoaXJ0MQ" }),
+      tryOn({ id: "65f0c0ffee0000000000aaa2", shareId: "U2Vjb25kTGluZW5TaGlydA", createdAt: new Date(NOW.getTime() - 2 * 3_600_000) }),
+    ]);
+    const region = await renderPage();
+    expect(within(region).getByRole("link", { name: "View and share your Linen Shirt try-on from 5 min ago" })).toHaveAttribute(
+      "href",
+      "/tryon/Rmlyc3RMaW5lblNoaXJ0MQ",
+    );
+    expect(within(region).getByRole("link", { name: "View and share your Linen Shirt try-on from 2 h ago" })).toHaveAttribute(
+      "href",
+      "/tryon/U2Vjb25kTGluZW5TaGlydA",
+    );
   });
 
   it("shows an empty state with a link to try something on", async () => {
