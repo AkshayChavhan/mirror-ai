@@ -58,16 +58,25 @@ describe("/tryon/[shareId] (public by link)", () => {
     expect(screen.getByText(/deleted after 24 hours/i)).toBeInTheDocument();
   });
 
+  it("offers to share a finished try-on's link on WhatsApp", async () => {
+    await renderPage();
+    const href = screen.getByRole("link", { name: "Share on WhatsApp" }).getAttribute("href") ?? "";
+    expect(new URL(href).searchParams.get("text")).toBe(
+      `See this Linen Shirt try-on on Mirror AI: ${window.location.origin}/tryon/${SHARE}`,
+    );
+  });
+
   it.each([
     ["PENDING", "This try-on is still being created."],
     ["PROCESSING", "This try-on is still being created."],
     ["FAILED", "This try-on didn't work."],
-  ])("shows %s as a message, with no photos or download", async (status, text) => {
+  ])("shows %s as a message, with no photos, download or share", async (status, text) => {
     m.getSharedTryOn.mockResolvedValue(shared({ status, resultUrl: null }));
     await renderPage();
     expect(screen.getByText(text, { exact: false })).toBeInTheDocument();
     expect(screen.queryByTestId("slider")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /download/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /whatsapp/i })).not.toBeInTheDocument();
   });
 
   it("is a 404 for an unknown or expired link (including an ObjectId instead of a token)", async () => {
@@ -83,6 +92,7 @@ describe("/tryon/[shareId] (public by link)", () => {
     await renderPage();
     expect(screen.getByRole("alert")).toHaveTextContent("We couldn't load this try-on. Please try again.");
     expect(screen.queryByText(/mongodb/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /whatsapp/i })).not.toBeInTheDocument();
     expect(m.notFound).not.toHaveBeenCalled();
   });
 

@@ -80,7 +80,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ❌ | 42 | `42_add_tryon_camera` | Live camera capture with a pose guide overlay | Unit + E2E (fake camera) |
 | ❌ | 43 | `43_add_tryon_loading_screen` | Loading screen that polls until the try-on is done or has failed | Unit + E2E |
 | ✅ | 44 | `44_add_tryon_result_page` | `/tryon/[shareId]` (public link, random token from task 56): before/after slider, download | Unit + E2E |
-| ❌ | 45 | `45_add_whatsapp_share` | Share-to-WhatsApp button | Unit + E2E |
+| ✅ | 45 | `45_add_whatsapp_share` | Share-to-WhatsApp button (a `wa.me` link on a finished `/tryon/[shareId]` page, built from the page's own address) | Unit + E2E |
 
 ### Group F: History and wishlist
 
@@ -97,13 +97,15 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | Status | # | Branch | What | Tests |
 |---|---|---|---|---|
 | ✅ | 51 | `51_add_cleanup_cron` | Hourly Inngest cron: delete try-ons older than 24 h and their Cloudinary images | Unit (mocks) |
-| ❌ | 52 | `52_add_tryon_rate_limit` | Per-user try-on limit | Unit: under/at/over the limit |
+| ❌ | 52 | `52_add_tryon_rate_limit` | Per-user try-on limit: **3 try-ons per rolling hour** (the developer's choice, 2026-09-29), with a friendly message saying when the next one is possible. Failed try-ons don't count and admins have no limit (Claude's suggestion; the developer can change it) | Unit: under/at/over the limit, failed ones not counted, admins exempt |
 | ✅ | 55 | `55_cleanup_images_on_product_delete` | Deleting a product also deletes its Cloudinary images: the garment image, **and** the `personUrl`/`resultUrl` of its try-ons (their rows cascade-delete, so the 24 h cron could never find them). Reuses `deleteImage()` (task 38). **Must be done before task 41**, the first page that lets users create try-ons. Added by task 38, approved by the developer on 2026-09-28 | Unit (mocks): images deleted before the rows; a failed image delete is logged |
 | ✅ | 56 | `56_add_tryon_share_token` | Give each `TryOn` a random, unguessable share token (e.g. `shareId`, 128-bit, unique) and use it in the public `/tryon/[id]` link instead of the ObjectId. ObjectIds are a timestamp, a per-process value and a counter, so they can be guessed from one shared link. Fix the "random ObjectIds" line in `docs/project-plan.md`. **Must be done before task 44.** Added by task 38's review, approved by the developer on 2026-09-28 | Unit: token is random and unique; the page looks up by token, and an ObjectId doesn't work |
-| ❌ | 57 | `57_add_wishlist_item_limit` | Cap how many wishlist items one owner (user or anonymous id) can have, e.g. N items, with a friendly message when full. Anonymous visitors could otherwise add rows without limit. Suggested by task 48's review, approved by the developer on 2026-09-28 (the number is still needed) | Unit: under/at/over the cap |
+| ❌ | 57 | `57_add_wishlist_item_limit` | Cap how many wishlist items one owner (user or anonymous id) can have, e.g. N items, with a friendly message when full. Anonymous visitors could otherwise add rows without limit. Suggested by task 48's review, approved by the developer on 2026-09-28; the limit is **100 items per owner** (2026-09-29) | Unit: under/at/over the cap |
 | ❌ | 58 | `58_add_clerk_testing` | `@clerk/testing@2.2.39` (dev) and signed-in Playwright E2E: the admin non-admin 404 check and signed-in flows. Approved by the developer on 2026-09-28 | E2E: signed-in user, admin vs non-admin |
 | ✅ | 59 | `59_tidy_lockfile_and_audit` | Delete the stray untracked `pnpm-lock.yaml` (the project uses npm), and settle the Prisma `npm audit` finding (`deepmerge-ts` < 8): upgrade to a fixed stable Prisma 6 if one exists, else accept and document it (CLI only, never shipped). The developer said "do best" on 2026-09-28 | `npm audit` result recorded; build and tests pass |
 | ✅ | 60 | `60_add_ci_test_database` | E2E test database: CI starts a throwaway local MongoDB (replica set), creates its indexes, and Playwright seeds known sample data before each run (guarded: only a local database named `...-e2e`). Data-backed E2E specs skip without it. Approved by the developer on 2026-09-29 (option b, so tasks like 45 get real E2E tests) | Unit: the seed guard, seed order and sample data; E2E (CI): landing products, finished/failed result pages, anonymous wishlist |
+| ❌ | 61 | `61_add_cloudinary_folder_sweep` | The hourly cleanup also sweeps Cloudinary's `mirror-ai/people/` and `mirror-ai/results/` folders by upload time (Admin API) and deletes files older than the 24 h lifetime plus a safety margin. That catches photos with no row, e.g. when a best-effort `deleteImage` failed. Never touches `mirror-ai/garments/`. From task 38's review, approved by the developer on 2026-09-29 | Unit (Cloudinary mocked): old files deleted, recent ones kept, garments never listed, paging, an API error is logged |
+| ❌ | 62 | `62_renew_anonymous_cookie` | Renew the anonymous wishlist cookie (`mirror_anon_id`, 1 year) on every save, so active signed-out visitors keep their list; only a year without saving lets it expire. Decided by the developer on 2026-09-29 | Unit: a save re-sets the cookie with a fresh 1-year lifetime; an invalid cookie is still replaced |
 
 ### Group H: Housekeeping
 
@@ -115,10 +117,8 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 ## Blockers
 
 - **26:** needs Cloudinary credentials only for real uploads. Its unit tests mock the SDK.
-- **52:** needs the developer's limit and time window (e.g. N try-ons per user per day).
 - **42, 43:** their E2E tests run on the signed-in `/tryon` page, so they need task 58 (signed-in E2E) first.
 - **58:** needs two test users in the developer's Clerk instance (a normal user and an admin with `publicMetadata.role = "admin"`), and their sign-in details as local env vars and GitHub secrets.
-- **57:** approved; still needs the developer's item limit (e.g. 100 items per owner).
 
 ## Later (not yet split into tasks)
 
@@ -126,5 +126,5 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 - Test sarees on the chosen model.
 - Self-host CatVTON (if quality or the non-commercial license becomes a problem).
 - Decide on the `server-only` package.
-- Task 51 idea (from task 38's review): besides deleting rows older than 24 h, also sweep Cloudinary's `mirror-ai/people` (and results) folder by upload time with the Admin API. That catches photos with no row, e.g. when a best-effort `deleteImage` failed. Needs the developer's OK to change task 51.
+- (Now task 61, approved 2026-09-29.) Sweep Cloudinary's `mirror-ai/people` and results folders by upload time.
 - (Done in task 55.) Deleting a product now deletes its try-on photos and garment image first.
