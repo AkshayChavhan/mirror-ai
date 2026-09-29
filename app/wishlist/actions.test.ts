@@ -69,7 +69,7 @@ describe("wishlist actions", () => {
       expect(m.revalidatePath).toHaveBeenCalledWith("/wishlist");
     });
 
-    it("signed out, saves under the anonymous id (creating the cookie if needed)", async () => {
+    it("signed out, saves under the anonymous id (creating or renewing the cookie)", async () => {
       await expect(addToWishlistAction(PRODUCT_ID)).resolves.toEqual(OK);
       expect(m.getOrCreateAnonymousId).toHaveBeenCalled();
       expect(m.addWishlistItem).toHaveBeenCalledWith({ anonymousId: ANON }, PRODUCT_ID);

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { E2E_DATA } from "../scripts/e2e-db";
 
@@ -67,5 +68,21 @@ test.describe("pages backed by the seeded test database", () => {
     const saved = page.getByRole("region", { name: "Saved garments" });
     await expect(saved.getByRole("heading", { name: products.dress.name })).toBeVisible();
     await expect(saved.getByRole("heading", { name: products.shirt.name })).toHaveCount(0);
+  });
+
+  test("saving renews the anonymous cookie for another year (task 62)", async ({ page, context, baseURL }) => {
+    // Its own random id (not the seeded one, whose list another spec checks), in a cookie that ends tomorrow.
+    const id = randomUUID();
+    const tomorrow = Math.floor(Date.now() / 1000) + 24 * 60 * 60;
+    await context.addCookies([
+      { name: "mirror_anon_id", value: id, url: baseURL ?? "http://localhost:3100", expires: tomorrow },
+    ]);
+    await page.goto("/");
+    await page.getByRole("button", { name: `Save ${products.shirt.name} to wishlist` }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+
+    const cookie = (await context.cookies()).find((c) => c.name === "mirror_anon_id");
+    expect(cookie?.value).toBe(id); // the same list, not a new one
+    expect(cookie?.expires).toBeGreaterThan(Date.now() / 1000 + 364 * 24 * 60 * 60); // a year from now
   });
 });

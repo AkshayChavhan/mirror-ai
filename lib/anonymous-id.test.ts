@@ -48,10 +48,17 @@ describe("lib/anonymous-id", () => {
   });
 
   describe("getOrCreateAnonymousId", () => {
-    it("reuses a valid existing id without setting a cookie", async () => {
+    it("keeps a valid existing id, and renews its cookie for another full year (task 62)", async () => {
       cookieHas(VALID);
       await expect(getOrCreateAnonymousId()).resolves.toBe(VALID);
-      expect(store.set).not.toHaveBeenCalled();
+      expect(store.set).toHaveBeenCalledTimes(1);
+      expect(store.set).toHaveBeenCalledWith("mirror_anon_id", VALID, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false, // tests don't run in production
+        path: "/",
+        maxAge: 31_536_000,
+      });
     });
 
     it("creates a random UUID v4 and stores it in a locked-down cookie for a year", async () => {
