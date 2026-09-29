@@ -23,7 +23,7 @@ function failed(error: unknown): WishlistActionState {
   return { error: "Something went wrong. Please try again." };
 }
 
-/** Saves a garment. Signed out, this creates the anonymous id cookie if the visitor doesn't have one yet. */
+/** Saves a garment. Signed out, this creates the anonymous id cookie if needed, or renews it for another year. */
 export async function addToWishlistAction(productId: string): Promise<WishlistActionState> {
   try {
     if (typeof productId !== "string" || !/^[a-f0-9]{24}$/i.test(productId)) {

@@ -22,14 +22,13 @@ export async function getAnonymousId(): Promise<string | null> {
 }
 
 /**
- * The visitor's anonymous id, creating it (and its cookie) if needed. Setting a cookie only works in a
- * Server Action or Route Handler, not while a page renders (Next 16 `cookies()` docs).
+ * The visitor's anonymous id, creating it if needed. Called on every save, so it also RENEWS the cookie:
+ * an active visitor's list never expires, and only a year without saving lets it go (decided 2026-09-29).
+ * Setting a cookie only works in a Server Action or Route Handler, not while a page renders (Next 16
+ * `cookies()` docs).
  */
 export async function getOrCreateAnonymousId(): Promise<string> {
-  const existing = await getAnonymousId();
-  if (existing) return existing;
-
-  const id = randomUUID();
+  const id = (await getAnonymousId()) ?? randomUUID();
   (await cookies()).set(ANONYMOUS_ID_COOKIE, id, {
     httpOnly: true, // page scripts (and any injected script) can't read it
     sameSite: "lax", // not sent on cross-site POSTs
