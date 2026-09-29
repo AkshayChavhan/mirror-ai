@@ -1,10 +1,18 @@
 "use server";
 
-import { requireUser } from "@/lib/auth";
+import { isAdmin, requireUser } from "@/lib/auth";
 import { ImageUploadError, deleteImage, uploadImage } from "@/lib/cloudinary";
 import { inngest, tryOnRequested } from "@/lib/inngest";
 import { ProductError, getProduct } from "@/lib/products";
-import { TryOnRecordError, createTryOn, failTryOn } from "@/lib/tryons";
+import {
+  TRYON_LIMIT,
+  TryOnRecordError,
+  createTryOn,
+  deleteTryOns,
+  failTryOn,
+  isOverTryOnLimit,
+  nextTryOnAllowedAt,
+} from "@/lib/tryons";
 
 // The "Try on" Server Action (docs/project-plan.md, "Try-on job lifecycle", step 1). The /tryon page
 // (task 41) calls it. Per the Next 16 guide, it authenticates and validates on its own, and returns
@@ -56,18 +64,68 @@ async function readPhoto(formData: FormData): Promise<Photo> {
   return { bytes, type };
 }
 
+/** "You've used your 3 try-ons for this hour. You can start another in 12 minutes." (minutes: no time zones) */
+function limitMessage(retryAt: Date): string {
+  const minutes = Math.max(1, Math.ceil((retryAt.getTime() - Date.now()) / 60_000));
+  return `You've used your ${TRYON_LIMIT} try-ons for this hour. You can start another in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+}
+
+/** After try-ons started at the same moment were undone: the real wait isn't known yet (the others may be going too). */
+const TOO_MANY_AT_ONCE = "Too many try-ons started at once. Please try again in a moment.";
+
+/** Asks Clerk whether the user is an admin at most once per request, and only if the answer is needed. */
+type AdminCheck = () => Promise<boolean>;
+
+/** Refuses when the user has used their try-ons for this hour (task 52). Admins have no limit. */
+async function checkTryOnLimit(userId: string, userIsAdmin: AdminCheck): Promise<void> {
+  const retryAt = await nextTryOnAllowedAt(userId);
+  if (retryAt && !(await userIsAdmin())) throw new FormError(limitMessage(retryAt));
+}
+
+/**
+ * Deletes a try-on that never started: its photo first, then its row. Best effort and logged. If the photo
+ * delete fails, the hourly folder sweep (task 61) removes it after 25 h. If the row delete fails, the row is
+ * marked FAILED instead, so it isn't stuck "Waiting to start…" and doesn't count toward the limit.
+ */
+async function undoTryOn(tryOnId: string, publicId: string): Promise<void> {
+  await deleteImage(publicId); // never throws
+  try {
+    await deleteTryOns([tryOnId]);
+  } catch (error) {
+    console.error("[tryon] Deleting a try-on that never started failed:", error);
+    await failTryOn(tryOnId, START_FAILED, ["PENDING"]).catch((failError: unknown) => {
+      console.error("[tryon] Marking it FAILED instead also failed:", failError);
+    });
+  }
+}
+
 /** Uploads the photo (without its metadata) and saves the PENDING row. Returns the new try-on's id. */
-async function saveTryOn(userId: string, productId: string, photo: Photo): Promise<string> {
+async function saveTryOn(userId: string, productId: string, photo: Photo, userIsAdmin: AdminCheck): Promise<string> {
   const dataUri = `data:${photo.type};base64,${photo.bytes.toString("base64")}`;
   const uploaded = await uploadImage(dataUri, PEOPLE_FOLDER, { stripMetadata: true }); // no GPS in shared links
+  let tryOnId: string;
   try {
-    const tryOn = await createTryOn({ userId, productId, personUrl: uploaded.url });
-    return tryOn.id;
+    tryOnId = (await createTryOn({ userId, productId, personUrl: uploaded.url })).id;
   } catch (error) {
     // No row points at the photo, so the 24 h cleanup could never find it: delete it now.
     await deleteImage(uploaded.publicId);
     throw error;
   }
+
+  // Check the limit again now that this row exists: two try-ons started at the same moment could both
+  // have passed the first check. If this one is over (or the check fails, Clerk included), it never starts.
+  let over: boolean;
+  try {
+    over = (await isOverTryOnLimit(userId)) && !(await userIsAdmin());
+  } catch (error) {
+    await undoTryOn(tryOnId, uploaded.publicId);
+    throw error;
+  }
+  if (over) {
+    await undoTryOn(tryOnId, uploaded.publicId);
+    throw new FormError(TOO_MANY_AT_ONCE);
+  }
+  return tryOnId;
 }
 
 function toFormState(error: unknown): TryOnFormState {
@@ -86,11 +144,16 @@ function toFormState(error: unknown): TryOnFormState {
 export async function createTryOnAction(_prev: TryOnFormState, formData: FormData): Promise<TryOnFormState> {
   const userId = await requireUser(); // from the session; redirects to sign-in when signed out
 
+  // Clerk is asked "admin?" only when someone is over the limit, and at most once per request.
+  let admin: Promise<boolean> | undefined;
+  const userIsAdmin: AdminCheck = () => (admin ??= isAdmin());
+
   let tryOnId: string;
   try {
     const photo = await readPhoto(formData); // photo checks first, before the database or Cloudinary
+    await checkTryOnLimit(userId, userIsAdmin); // before anything is uploaded
     const productId = await readActiveProductId(formData);
-    tryOnId = await saveTryOn(userId, productId, photo);
+    tryOnId = await saveTryOn(userId, productId, photo, userIsAdmin);
   } catch (error) {
     return toFormState(error);
   }

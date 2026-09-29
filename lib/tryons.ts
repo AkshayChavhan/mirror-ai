@@ -142,6 +142,49 @@ export async function failTryOn(id: string, errorMessage: string, from: TryOnSta
 /** Try-ons (and their photos) live for 24 h (docs/project-plan.md, "Privacy"). */
 export const TRYON_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * At most this many try-ons per user in any rolling hour (the developer's choice, 2026-09-29). Failed
+ * try-ons don't count (not the user's fault); admins have no limit (checked by the caller).
+ */
+export const TRYON_LIMIT = 3;
+export const TRYON_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+/** When the user's counted (not FAILED) try-ons from the last hour were made, newest first: at most TRYON_LIMIT + 1. */
+async function recentCountedTryOns(action: string, userId: string, now: Date): Promise<Date[]> {
+  if (!userId) invalid("Please sign in to try garments on.");
+  const rows = await db(action, () =>
+    prisma.tryOn.findMany({
+      where: {
+        userId,
+        status: { not: TryOnStatus.FAILED },
+        createdAt: { gt: new Date(now.getTime() - TRYON_LIMIT_WINDOW_MS) },
+      },
+      orderBy: { createdAt: "desc" },
+      take: TRYON_LIMIT + 1,
+      select: { createdAt: true },
+    }),
+  );
+  return rows.map((row) => row.createdAt);
+}
+
+/**
+ * Before starting a try-on: null when the user may start one now, otherwise when they may. That's when the
+ * TRYON_LIMIT-th newest counted try-on leaves the hour, leaving room for one more.
+ */
+export async function nextTryOnAllowedAt(userId: string, now = new Date()): Promise<Date | null> {
+  const recent = await recentCountedTryOns("nextTryOnAllowedAt", userId, now);
+  return recent.length < TRYON_LIMIT ? null : new Date(recent[TRYON_LIMIT - 1].getTime() + TRYON_LIMIT_WINDOW_MS);
+}
+
+/**
+ * After saving a try-on: true when the user now has MORE than TRYON_LIMIT counted try-ons in the hour, e.g.
+ * two started at the same moment both passed the check before. Each counts the other's row, so racing
+ * try-ons can't both stay (at worst both are undone, and a retry works).
+ */
+export async function isOverTryOnLimit(userId: string, now = new Date()): Promise<boolean> {
+  return (await recentCountedTryOns("isOverTryOnLimit", userId, now)).length > TRYON_LIMIT;
+}
+
 /** Only what the loading screen needs: the status, and when done, the result and its share token. */
 export type TryOnStatusView = {
   status: TryOnStatus;

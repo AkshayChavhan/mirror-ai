@@ -4,14 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Everything outside the action is mocked: auth, Cloudinary, the database, and Inngest.
 const m = vi.hoisted(() => ({
   requireUser: vi.fn(),
+  isAdmin: vi.fn(),
   uploadImage: vi.fn(),
   deleteImage: vi.fn(),
   getProduct: vi.fn(),
   createTryOn: vi.fn(),
   failTryOn: vi.fn(),
+  deleteTryOns: vi.fn(),
+  nextTryOnAllowedAt: vi.fn(),
+  isOverTryOnLimit: vi.fn(),
   send: vi.fn(),
 }));
-vi.mock("@/lib/auth", () => ({ requireUser: m.requireUser }));
+vi.mock("@/lib/auth", () => ({ requireUser: m.requireUser, isAdmin: m.isAdmin }));
 vi.mock("@/lib/cloudinary", async () => {
   const actual = await vi.importActual<typeof import("@/lib/cloudinary")>("@/lib/cloudinary");
   return { ImageUploadError: actual.ImageUploadError, uploadImage: m.uploadImage, deleteImage: m.deleteImage };
@@ -26,7 +30,15 @@ vi.mock("@/lib/products", async () => {
 });
 vi.mock("@/lib/tryons", async () => {
   const actual = await vi.importActual<typeof import("@/lib/tryons")>("@/lib/tryons");
-  return { TryOnRecordError: actual.TryOnRecordError, createTryOn: m.createTryOn, failTryOn: m.failTryOn };
+  return {
+    TRYON_LIMIT: actual.TRYON_LIMIT,
+    TryOnRecordError: actual.TryOnRecordError,
+    createTryOn: m.createTryOn,
+    failTryOn: m.failTryOn,
+    deleteTryOns: m.deleteTryOns,
+    nextTryOnAllowedAt: m.nextTryOnAllowedAt,
+    isOverTryOnLimit: m.isOverTryOnLimit,
+  };
 });
 
 import { ImageUploadError } from "@/lib/cloudinary";
@@ -75,6 +87,10 @@ describe("createTryOnAction", () => {
     m.deleteImage.mockResolvedValue(true);
     m.createTryOn.mockResolvedValue({ id: TRYON_ID, status: "PENDING" });
     m.failTryOn.mockResolvedValue(true);
+    m.deleteTryOns.mockResolvedValue(1);
+    m.nextTryOnAllowedAt.mockResolvedValue(null); // under the limit
+    m.isOverTryOnLimit.mockResolvedValue(false);
+    m.isAdmin.mockResolvedValue(false);
     m.send.mockResolvedValue({ ids: ["evt_1"] });
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -196,6 +212,116 @@ describe("createTryOnAction", () => {
     m.failTryOn.mockRejectedValue(dbError);
     await expect(createTryOnAction(EMPTY, form())).resolves.toEqual(START_FAILED);
     expect(console.error).toHaveBeenCalledWith("[tryon] Marking the try-on FAILED also failed:", dbError);
+  });
+
+  describe("the try-on limit (task 52: 3 per hour; failed ones don't count, admins have none)", () => {
+    const inMinutes = (minutes: number) => new Date(Date.now() + minutes * 60_000);
+    const full = (when: string) => ({ error: `You've used your 3 try-ons for this hour. ${when}`, tryOnId: null });
+
+    it("under the limit, starts the try-on without asking Clerk whether the user is an admin", async () => {
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({ error: null, tryOnId: TRYON_ID });
+      expect(m.nextTryOnAllowedAt).toHaveBeenCalledWith(USER);
+      expect(m.isOverTryOnLimit).toHaveBeenCalledWith(USER);
+      expect(m.isAdmin).not.toHaveBeenCalled();
+    });
+
+    it("at the limit, refuses before uploading anything and says when to try again", async () => {
+      m.nextTryOnAllowedAt.mockResolvedValue(inMinutes(12));
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual(full("You can start another in 12 minutes."));
+      expect(m.uploadImage).not.toHaveBeenCalled();
+      expect(m.getProduct).not.toHaveBeenCalled();
+      expect(m.createTryOn).not.toHaveBeenCalled();
+    });
+
+    it("says '1 minute' (not '0 minutes') when the wait is under a minute", async () => {
+      m.nextTryOnAllowedAt.mockResolvedValue(inMinutes(0.2));
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual(full("You can start another in 1 minute."));
+    });
+
+    it("lets an admin past both checks, asking Clerk only once", async () => {
+      m.nextTryOnAllowedAt.mockResolvedValue(inMinutes(30));
+      m.isOverTryOnLimit.mockResolvedValue(true);
+      m.isAdmin.mockResolvedValue(true);
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({ error: null, tryOnId: TRYON_ID });
+      expect(m.send).toHaveBeenCalled();
+      expect(m.deleteTryOns).not.toHaveBeenCalled();
+      expect(m.isAdmin).toHaveBeenCalledTimes(1);
+    });
+
+    it("undoes a try-on that went over in a race (photo first, then row) and never starts it", async () => {
+      m.isOverTryOnLimit.mockResolvedValue(true);
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({
+        error: "Too many try-ons started at once. Please try again in a moment.",
+        tryOnId: null,
+      });
+      expect(m.deleteImage).toHaveBeenCalledWith(UPLOADED.publicId);
+      expect(m.deleteTryOns).toHaveBeenCalledWith([TRYON_ID]);
+      expect(m.deleteImage.mock.invocationCallOrder[0]).toBeLessThan(m.deleteTryOns.mock.invocationCallOrder[0]);
+      expect(m.failTryOn).not.toHaveBeenCalled();
+      expect(m.send).not.toHaveBeenCalled();
+    });
+
+    it("if the re-check fails, undoes the try-on and shows a friendly message", async () => {
+      m.isOverTryOnLimit.mockRejectedValue(new TryOnRecordError("DB_ERROR", "Something went wrong saving your try-on."));
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({
+        error: "Something went wrong saving your try-on.",
+        tryOnId: null,
+      });
+      expect(m.deleteImage).toHaveBeenCalledWith(UPLOADED.publicId);
+      expect(m.deleteTryOns).toHaveBeenCalledWith([TRYON_ID]);
+      expect(m.send).not.toHaveBeenCalled();
+    });
+
+    it("if Clerk fails in the first check (over the limit), shows the generic message and uploads nothing", async () => {
+      const clerkError = new Error("Clerk: 503");
+      m.nextTryOnAllowedAt.mockResolvedValue(inMinutes(10));
+      m.isAdmin.mockRejectedValue(clerkError);
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({
+        error: "Something went wrong. Please try again.",
+        tryOnId: null,
+      });
+      expect(m.uploadImage).not.toHaveBeenCalled();
+      expect(console.error).toHaveBeenCalledWith("[tryon] Unexpected error:", clerkError);
+    });
+
+    it("if Clerk fails in the re-check, undoes the try-on, shows the generic message, and never starts it", async () => {
+      m.isOverTryOnLimit.mockResolvedValue(true);
+      m.isAdmin.mockRejectedValue(new Error("Clerk: 503"));
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({
+        error: "Something went wrong. Please try again.",
+        tryOnId: null,
+      });
+      expect(m.deleteImage).toHaveBeenCalledWith(UPLOADED.publicId);
+      expect(m.deleteTryOns).toHaveBeenCalledWith([TRYON_ID]);
+      expect(m.send).not.toHaveBeenCalled();
+    });
+
+    it("marks the row FAILED when deleting it fails, so it isn't stuck 'Waiting to start' or counted", async () => {
+      const dbError = new TryOnRecordError("DB_ERROR", "db down");
+      m.isOverTryOnLimit.mockResolvedValue(true);
+      m.deleteTryOns.mockRejectedValue(dbError);
+      await expect(createTryOnAction(EMPTY, form())).resolves.toMatchObject({ tryOnId: null });
+      expect(console.error).toHaveBeenCalledWith("[tryon] Deleting a try-on that never started failed:", dbError);
+      expect(m.failTryOn).toHaveBeenCalledWith(TRYON_ID, START_FAILED.error, ["PENDING"]);
+    });
+
+    it("logs both when deleting the row and marking it FAILED fail", async () => {
+      const failError = new TryOnRecordError("DB_ERROR", "still down");
+      m.isOverTryOnLimit.mockResolvedValue(true);
+      m.deleteTryOns.mockRejectedValue(new TryOnRecordError("DB_ERROR", "db down"));
+      m.failTryOn.mockRejectedValue(failError);
+      await expect(createTryOnAction(EMPTY, form())).resolves.toMatchObject({ tryOnId: null });
+      expect(console.error).toHaveBeenCalledWith("[tryon] Marking it FAILED instead also failed:", failError);
+    });
+
+    it("shows a friendly message and uploads nothing when the first check fails", async () => {
+      m.nextTryOnAllowedAt.mockRejectedValue(new TryOnRecordError("DB_ERROR", "Something went wrong saving your try-on."));
+      await expect(createTryOnAction(EMPTY, form())).resolves.toEqual({
+        error: "Something went wrong saving your try-on.",
+        tryOnId: null,
+      });
+      expect(m.uploadImage).not.toHaveBeenCalled();
+    });
   });
 
   it("hides unexpected errors behind a generic message and logs them", async () => {
