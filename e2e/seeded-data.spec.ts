@@ -25,10 +25,21 @@ test.describe("pages backed by the seeded test database", () => {
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
   });
 
-  test("a failed try-on's public link says so, with no photos", async ({ page }) => {
+  test("a finished try-on's public link can be shared on WhatsApp (task 45)", async ({ page, baseURL }) => {
+    await page.goto(`/tryon/${shareIds.done}`);
+    // The link appears once the page runs in the browser (it needs the page's address).
+    const share = page.getByRole("link", { name: "Share on WhatsApp" });
+    await expect(share).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
+    await expect(share).toHaveAttribute("target", "_blank");
+    const text = new URL((await share.getAttribute("href")) ?? "").searchParams.get("text");
+    expect(text).toBe(`See this ${products.shirt.name} try-on on Mirror AI: ${baseURL}/tryon/${shareIds.done}`);
+  });
+
+  test("a failed try-on's public link says so, with no photos or share", async ({ page }) => {
     await page.goto(`/tryon/${shareIds.failed}`);
     await expect(page.getByText("This try-on didn't work.")).toBeVisible();
     await expect(page.getByRole("slider")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Share on WhatsApp" })).toHaveCount(0);
   });
 
   test("a signed-out visitor with the anonymous cookie sees their saved garments, not hidden ones", async ({

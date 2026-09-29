@@ -4,6 +4,7 @@ import { notFound, unstable_rethrow } from "next/navigation";
 import { downloadUrl } from "@/lib/cloudinary";
 import { getSharedTryOn, type SharedTryOn } from "@/lib/tryons";
 import BeforeAfter from "./BeforeAfter";
+import WhatsAppShareLink from "./WhatsAppShareLink";
 
 // Public by link (decided 2026-09-26, for WhatsApp sharing). The link's token is the random shareId
 // (task 56); an ObjectId or anything else simply isn't found.
@@ -43,13 +44,16 @@ export default async function SharedTryOnPage({ params }: Props) {
       ) : tryOn && tryOn.status === "DONE" && tryOn.resultUrl ? (
         <>
           <BeforeAfter beforeUrl={tryOn.personUrl} afterUrl={tryOn.resultUrl} productName={tryOn.product.name} />
-          <a
-            href={downloadUrl(tryOn.resultUrl) ?? tryOn.resultUrl}
-            download
-            className="self-start rounded bg-black px-5 py-3 text-white dark:bg-white dark:text-black"
-          >
-            Download the result
-          </a>
+          <div className="flex flex-wrap gap-3">
+            <a
+              href={downloadUrl(tryOn.resultUrl) ?? tryOn.resultUrl}
+              download
+              className="rounded bg-black px-5 py-3 text-white dark:bg-white dark:text-black"
+            >
+              Download the result
+            </a>
+            <WhatsAppShareLink path={`/tryon/${shareId}`} productName={tryOn.product.name} />
+          </div>
         </>
       ) : tryOn && tryOn.status === "FAILED" ? (
         <p className="text-zinc-600 dark:text-zinc-400">This try-on didn&apos;t work.</p>
