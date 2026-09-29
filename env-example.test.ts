@@ -12,6 +12,7 @@ const EXPECTED_KEYS = [
   "HF_TOKEN",
   "INNGEST_EVENT_KEY",
   "INNGEST_SIGNING_KEY",
+  "E2E_DATABASE_URL",
 ];
 
 function parseEnvExample(): Map<string, string> {

@@ -103,6 +103,7 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 | ❌ | 57 | `57_add_wishlist_item_limit` | Cap how many wishlist items one owner (user or anonymous id) can have, e.g. N items, with a friendly message when full. Anonymous visitors could otherwise add rows without limit. Suggested by task 48's review, approved by the developer on 2026-09-28 (the number is still needed) | Unit: under/at/over the cap |
 | ❌ | 58 | `58_add_clerk_testing` | `@clerk/testing@2.2.39` (dev) and signed-in Playwright E2E: the admin non-admin 404 check and signed-in flows. Approved by the developer on 2026-09-28 | E2E: signed-in user, admin vs non-admin |
 | ✅ | 59 | `59_tidy_lockfile_and_audit` | Delete the stray untracked `pnpm-lock.yaml` (the project uses npm), and settle the Prisma `npm audit` finding (`deepmerge-ts` < 8): upgrade to a fixed stable Prisma 6 if one exists, else accept and document it (CLI only, never shipped). The developer said "do best" on 2026-09-28 | `npm audit` result recorded; build and tests pass |
+| ✅ | 60 | `60_add_ci_test_database` | E2E test database: CI starts a throwaway local MongoDB (replica set), creates its indexes, and Playwright seeds known sample data before each run (guarded: only a local database named `...-e2e`). Data-backed E2E specs skip without it. Approved by the developer on 2026-09-29 (option b, so tasks like 45 get real E2E tests) | Unit: the seed guard, seed order and sample data; E2E (CI): landing products, finished/failed result pages, anonymous wishlist |
 
 ### Group H: Housekeeping
 
@@ -118,7 +119,6 @@ Built from `docs/project-plan.md`. Every page task includes its unit and E2E tes
 - **42, 43:** their E2E tests run on the signed-in `/tryon` page, so they need task 58 (signed-in E2E) first.
 - **58:** needs two test users in the developer's Clerk instance (a normal user and an admin with `publicMetadata.role = "admin"`), and their sign-in details as local env vars and GitHub secrets.
 - **57:** approved; still needs the developer's item limit (e.g. 100 items per owner).
-- **45:** builds on the result page (44), so it follows that task.
 
 ## Later (not yet split into tasks)
 
