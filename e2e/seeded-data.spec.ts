@@ -55,4 +55,17 @@ test.describe("pages backed by the seeded test database", () => {
     await expect(saved.getByText(products.hidden.name)).toHaveCount(0);
     await expect(saved.getByRole("button", { name: `Remove ${products.shirt.name} from wishlist` })).toBeVisible();
   });
+
+  test("a signed-out visitor can save a garment, and it's on their wishlist (task 57's count runs for real)", async ({
+    page,
+  }) => {
+    // A fresh browser: no cookie yet, so saving creates a new anonymous id (never the seeded one above).
+    await page.goto("/");
+    await page.getByRole("button", { name: `Save ${products.dress.name} to wishlist` }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+    await page.goto("/wishlist");
+    const saved = page.getByRole("region", { name: "Saved garments" });
+    await expect(saved.getByRole("heading", { name: products.dress.name })).toBeVisible();
+    await expect(saved.getByRole("heading", { name: products.shirt.name })).toHaveCount(0);
+  });
 });

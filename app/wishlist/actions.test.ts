@@ -105,6 +105,14 @@ describe("wishlist actions", () => {
       expect(m.revalidatePath).not.toHaveBeenCalled();
     });
 
+    it("says when the wishlist is full (task 57), without logging it as an error", async () => {
+      const full = "Your wishlist is full (100 items). Remove some to save more.";
+      m.addWishlistItem.mockRejectedValue(new WishlistError("LIMIT_REACHED", full));
+      await expect(addToWishlistAction(PRODUCT_ID)).resolves.toEqual({ error: full });
+      expect(console.error).not.toHaveBeenCalled();
+      expect(m.revalidatePath).not.toHaveBeenCalled();
+    });
+
     it("hides unexpected errors behind a generic message and logs them", async () => {
       const bug = new TypeError("boom");
       m.auth.mockRejectedValue(bug);

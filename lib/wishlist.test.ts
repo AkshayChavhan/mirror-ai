@@ -2,11 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the database client: no MongoDB needed.
-const { wishlistItem } = vi.hoisted(() => ({ wishlistItem: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() } }));
+const { wishlistItem } = vi.hoisted(() => ({ wishlistItem: { create: vi.fn(), count: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() } }));
 vi.mock("./prisma", () => ({ prisma: { wishlistItem } }));
 
 import {
   WishlistError,
+  WISHLIST_ITEM_LIMIT,
   addWishlistItem,
   claimAnonymousItems,
   listWishlist,
@@ -32,19 +33,70 @@ describe("lib/wishlist", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     wishlistItem.create.mockReset();
+    wishlistItem.count.mockReset();
     wishlistItem.deleteMany.mockReset();
     wishlistItem.findMany.mockReset();
     wishlistItem.updateMany.mockReset();
   });
 
   describe("addWishlistItem", () => {
+    beforeEach(() => {
+      wishlistItem.create.mockResolvedValue({ id: ITEM_ID });
+      wishlistItem.count.mockResolvedValue(1); // the new item is the first one
+    });
+
     it.each([
       ["a signed-in user", USER, { userId: "user_123" }],
       ["an anonymous visitor", ANON, { anonymousId: ANON.anonymousId }],
     ] as const)("saves the product for %s (only their own id column is set)", async (_case, owner, fields) => {
-      wishlistItem.create.mockResolvedValue({ id: ITEM_ID });
       await expect(addWishlistItem(owner, PRODUCT_ID)).resolves.toEqual({ id: ITEM_ID });
       expect(wishlistItem.create).toHaveBeenCalledWith({ data: { ...fields, productId: PRODUCT_ID } });
+      // Then counts only this owner's items for garments still shown, like /wishlist does.
+      expect(wishlistItem.count).toHaveBeenCalledWith({ where: { ...fields, product: { isActive: true } } });
+      expect(wishlistItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("allows the 100th item (at the limit)", async () => {
+      expect(WISHLIST_ITEM_LIMIT).toBe(100);
+      wishlistItem.count.mockResolvedValue(100);
+      await expect(addWishlistItem(USER, PRODUCT_ID)).resolves.toEqual({ id: ITEM_ID });
+      expect(wishlistItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it("refuses the 101st: undoes the save and says the list is full", async () => {
+      wishlistItem.count.mockResolvedValue(101);
+      wishlistItem.deleteMany.mockResolvedValue({ count: 1 });
+      const error = await wishlistError(addWishlistItem(ANON, PRODUCT_ID));
+      expect(error.code).toBe("LIMIT_REACHED");
+      expect(error.message).toBe("Your wishlist is full (100 items). Remove some to save more.");
+      expect(wishlistItem.deleteMany).toHaveBeenCalledWith({ where: { id: ITEM_ID } });
+    });
+
+    it("when the count fails, deletes the new item too (an error means nothing was saved) and says DB_ERROR", async () => {
+      const countError = new Error("timeout");
+      wishlistItem.count.mockRejectedValue(countError);
+      wishlistItem.deleteMany.mockResolvedValue({ count: 1 });
+      expect((await wishlistError(addWishlistItem(USER, PRODUCT_ID))).code).toBe("DB_ERROR");
+      expect(wishlistItem.deleteMany).toHaveBeenCalledWith({ where: { id: ITEM_ID } });
+      expect(console.error).toHaveBeenCalledWith("[wishlist] addWishlistItem failed:", countError);
+    });
+
+    it("when the count and that undo both fail, still says DB_ERROR and logs both", async () => {
+      const countError = new Error("timeout");
+      const undoError = new Error("still down");
+      wishlistItem.count.mockRejectedValue(countError);
+      wishlistItem.deleteMany.mockRejectedValue(undoError);
+      expect((await wishlistError(addWishlistItem(USER, PRODUCT_ID))).code).toBe("DB_ERROR");
+      expect(console.error).toHaveBeenCalledWith("[wishlist] Undoing a save after a failed count also failed:", undoError);
+      expect(console.error).toHaveBeenCalledWith("[wishlist] addWishlistItem failed:", countError);
+    });
+
+    it("when over the limit but the undo fails, says DB_ERROR (not 'full') and logs it", async () => {
+      const undoError = new Error("timeout");
+      wishlistItem.count.mockResolvedValue(101);
+      wishlistItem.deleteMany.mockRejectedValue(undoError);
+      expect((await wishlistError(addWishlistItem(ANON, PRODUCT_ID))).code).toBe("DB_ERROR");
+      expect(console.error).toHaveBeenCalledWith("[wishlist] addWishlistItem failed:", undoError);
     });
 
     it("rejects a malformed product id without touching the database", async () => {
@@ -111,7 +163,7 @@ describe("lib/wishlist", () => {
       expect(wishlistItem.findMany).toHaveBeenCalledWith({
         where: { ...fields, product: { isActive: true } },
         orderBy: { createdAt: "desc" },
-        take: 100,
+        take: 2 * WISHLIST_ITEM_LIMIT, // a merge after sign-in can go over the limit; all stay removable
         select: {
           id: true,
           createdAt: true,
