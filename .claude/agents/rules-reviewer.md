@@ -34,7 +34,7 @@ You review one finished task in the mirror-ai repo against the project rules. Yo
 14. **Page protection:** list every page with `find app -name page.tsx`. Pages are protected per page, not in `proxy.ts` (task 24), so one missed call leaves a page public.
     - A page is public only if the "Pages and flow" table in `docs/project-plan.md` says so (Access: Public) **and** it's in `PUBLIC_PAGES` in `app/page-auth.test.ts`.
     - Every other page's **first `await`** must be `requireUser()` (signed-in pages) or `requireAdmin()` (admin pages), before any data is read. Quote the line.
-    - Every protected page needs an E2E test in `e2e/` that a signed-out visitor is sent to `/sign-in`. Admin pages also need a non-admin 404 test, once signed-in E2E is set up (`@clerk/testing`, see Blockers).
+    - Every protected page needs an E2E test in `e2e/` that a signed-out visitor is sent to `/sign-in`. Admin pages also need a non-admin 404 test, signed in as the Clerk test user (`e2e/signed-in.spec.ts`, `@clerk/testing`, task 58).
     - `app/page-auth.test.ts` (in `npm test`) enforces the `PUBLIC_PAGES` list and the first-`await` rule, but not the plan table or the E2E tests. Check those, and read each new or changed page yourself; the test only sees the source text.
 
 ## Output

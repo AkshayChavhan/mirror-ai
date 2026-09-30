@@ -27,6 +27,7 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.39",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.2",
