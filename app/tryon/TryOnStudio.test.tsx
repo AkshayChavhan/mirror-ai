@@ -4,6 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({ createTryOnAction: vi.fn(), shrinkPhoto: vi.fn() }));
 vi.mock("./actions", () => ({ createTryOnAction: m.createTryOnAction }));
 vi.mock("./shrinkPhoto", () => ({ shrinkPhoto: m.shrinkPhoto }));
+// The camera itself is tested in CameraCapture.test.tsx; here a stand-in "takes" or cancels a photo.
+const CAMERA_PHOTO = new File(["frame"], "camera.jpg", { type: "image/jpeg" });
+vi.mock("./CameraCapture", () => ({
+  default: ({ onCapture, onCancel }: { onCapture: (photo: File) => void; onCancel: () => void }) => (
+    <div>
+      <button type="button" onClick={() => onCapture(CAMERA_PHOTO)}>
+        Fake take photo
+      </button>
+      <button type="button" onClick={onCancel}>
+        Fake cancel
+      </button>
+    </div>
+  ),
+}));
 
 import TryOnStudio, { type StudioProduct } from "./TryOnStudio";
 
@@ -81,6 +95,41 @@ describe("TryOnStudio", () => {
     // Locked after the start, so Retake or another garment can't leave a dead end.
     expect(screen.getByRole("button", { name: "Retake" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Linen Shirt" })).toBeDisabled();
+  });
+
+  describe("the camera (task 42)", () => {
+    function withCamera() {
+      vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { mediaDevices: { getUserMedia: vi.fn() } }));
+    }
+
+    it("offers no camera when the browser can't use one (e.g. not on https)", () => {
+      renderStudio();
+      expect(screen.queryByRole("button", { name: "Use camera" })).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Choose a photo")).toBeInTheDocument();
+    });
+
+    it("opens the camera, and its photo gets the same shrink and preview as a chosen one", async () => {
+      withCamera();
+      renderStudio();
+      fireEvent.click(screen.getByRole("button", { name: "Use camera" }));
+      fireEvent.click(screen.getByRole("button", { name: "Fake take photo" }));
+      expect(await screen.findByRole("img", { name: "Your photo" })).toHaveAttribute("src", "blob:preview");
+      expect(m.shrinkPhoto).toHaveBeenCalledWith(CAMERA_PHOTO);
+      expect(screen.getByRole("button", { name: "Try on Linen Shirt" })).toBeEnabled();
+      expect(screen.queryByRole("button", { name: "Fake take photo" })).not.toBeInTheDocument(); // camera closed
+      expect(screen.getByRole("heading", { name: "2. Add a photo of yourself" })).toHaveFocus(); // not lost to the page top
+    });
+
+    it("Cancel closes the camera and goes back to the two choices", () => {
+      withCamera();
+      renderStudio();
+      fireEvent.click(screen.getByRole("button", { name: "Use camera" }));
+      expect(screen.queryByLabelText("Choose a photo")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Fake cancel" }));
+      expect(screen.getByRole("button", { name: "Use camera" })).toBeInTheDocument();
+      expect(screen.getByLabelText("Choose a photo")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "2. Add a photo of yourself" })).toHaveFocus();
+    });
   });
 
   it("keeps an (empty) status line in the page from the start, so screen readers announce it later", () => {

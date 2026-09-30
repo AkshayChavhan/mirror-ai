@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { startTransition, useActionState, useEffect, useState } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createTryOnAction, type TryOnFormState } from "./actions";
+import CameraCapture from "./CameraCapture";
 import { shrinkPhoto } from "./shrinkPhoto";
 
 export type StudioProduct = { id: string; name: string; imageUrl: string };
@@ -13,23 +14,44 @@ type ChosenPhoto = { file: File; previewUrl: string };
 
 const INITIAL: TryOnFormState = { error: null, tryOnId: null };
 
-/** Pick a garment, choose a photo, check the preview, then Try on (or Retake). */
+// Whether this browser can use a camera: only known in the browser (the server render says no), and it
+// needs a secure page (https or localhost).
+const noSubscribe = () => () => {};
+const browserHasCamera = () => Boolean(navigator.mediaDevices?.getUserMedia);
+const serverHasCamera = () => false;
+
+/** Pick a garment, take or choose a photo, check the preview, then Try on (or Retake). */
 export default function TryOnStudio({ products, initialProductId }: Props) {
   const [productId, setProductId] = useState(initialProductId);
   const [photo, setPhoto] = useState<ChosenPhoto | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const canUseCamera = useSyncExternalStore(noSubscribe, browserHasCamera, serverHasCamera);
+  // When the camera closes, its buttons disappear: move focus to the photo step's heading, not the page top.
+  const photoHeadingRef = useRef<HTMLHeadingElement>(null);
+  const refocusAfterCamera = useRef(false);
   const [state, formAction, pending] = useActionState(createTryOnAction, INITIAL);
+
+  useEffect(() => {
+    if (!cameraOpen && refocusAfterCamera.current) {
+      refocusAfterCamera.current = false;
+      photoHeadingRef.current?.focus();
+    }
+  }, [cameraOpen]);
+
+  function closeCamera() {
+    refocusAfterCamera.current = true;
+    setCameraOpen(false);
+  }
 
   // Free the preview's memory when it's replaced or the page closes.
   useEffect(() => () => {
     if (photo) URL.revokeObjectURL(photo.previewUrl);
   }, [photo]);
 
-  async function onChoose(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = ""; // choosing the same file again still fires a change
-    if (!file) return;
+  /** A chosen or camera photo: shrink it (and drop its metadata), then show the preview. */
+  async function preparePhoto(file: File) {
     setPhotoError(null);
     setPreparing(true);
     try {
@@ -40,6 +62,17 @@ export default function TryOnStudio({ products, initialProductId }: Props) {
     } finally {
       setPreparing(false);
     }
+  }
+
+  async function onChoose(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = ""; // choosing the same file again still fires a change
+    if (file) await preparePhoto(file);
+  }
+
+  async function onCapture(file: File) {
+    closeCamera();
+    await preparePhoto(file);
   }
 
   function onTryOn() {
@@ -80,24 +113,38 @@ export default function TryOnStudio({ products, initialProductId }: Props) {
       </section>
 
       <section aria-labelledby="photo-heading" className="flex flex-col gap-3">
-        <h2 id="photo-heading" className="text-lg font-medium">
+        <h2 id="photo-heading" ref={photoHeadingRef} tabIndex={-1} className="text-lg font-medium focus:outline-none">
           2. Add a photo of yourself
         </h2>
-        {photo ? (
+        {cameraOpen ? (
+          <CameraCapture onCapture={onCapture} onCancel={closeCamera} />
+        ) : photo ? (
           // The user's own photo, from their device: a blob: URL, so a plain <img> (next/image can't optimize it).
           // eslint-disable-next-line @next/next/no-img-element
           <img src={photo.previewUrl} alt="Your photo" className="max-h-96 w-auto self-start rounded-lg" />
         ) : (
-          <label className="self-start rounded border px-4 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-black dark:has-[:focus-visible]:ring-white">
-            {preparing ? "Preparing your photo…" : "Choose a photo"}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={onChoose}
-              disabled={preparing}
-              className="sr-only"
-            />
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            {canUseCamera && (
+              <button
+                type="button"
+                onClick={() => setCameraOpen(true)}
+                disabled={preparing}
+                className="rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              >
+                Use camera
+              </button>
+            )}
+            <label className="rounded border px-4 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-black dark:has-[:focus-visible]:ring-white">
+              {preparing ? "Preparing your photo…" : "Choose a photo"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={onChoose}
+                disabled={preparing}
+                className="sr-only"
+              />
+            </label>
+          </div>
         )}
         {photoError && (
           <p role="alert" className="text-red-600 dark:text-red-400">
