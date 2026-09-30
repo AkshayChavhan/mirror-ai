@@ -1,9 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ createTryOnAction: vi.fn(), shrinkPhoto: vi.fn() }));
+const m = vi.hoisted(() => ({
+  createTryOnAction: vi.fn(),
+  shrinkPhoto: vi.fn(),
+  useTryOnStatus: vi.fn(),
+  navigate: vi.fn(),
+}));
 vi.mock("./actions", () => ({ createTryOnAction: m.createTryOnAction }));
 vi.mock("./shrinkPhoto", () => ({ shrinkPhoto: m.shrinkPhoto }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: m.navigate }) }));
+// The polling itself is tested in useTryOnStatus.test.ts; here each test says what it reports.
+vi.mock("./useTryOnStatus", () => ({ useTryOnStatus: m.useTryOnStatus }));
+type Progress = import("./useTryOnStatus").TryOnProgress;
+let progress: Progress = { kind: "waiting", status: "PENDING", slow: false };
 // The camera itself is tested in CameraCapture.test.tsx; here a stand-in "takes" or cancels a photo.
 const CAMERA_PHOTO = new File(["frame"], "camera.jpg", { type: "image/jpeg" });
 vi.mock("./CameraCapture", () => ({
@@ -27,8 +37,8 @@ const PRODUCTS: StudioProduct[] = [
 ];
 const SMALL = new File(["small"], "photo.jpg", { type: "image/jpeg" });
 
-function renderStudio(initialProductId = PRODUCTS[0].id) {
-  render(<TryOnStudio products={PRODUCTS} initialProductId={initialProductId} />);
+function renderStudio(initialProductId = PRODUCTS[0].id, initialTryOnId: string | null = null) {
+  return render(<TryOnStudio products={PRODUCTS} initialProductId={initialProductId} initialTryOnId={initialTryOnId} />);
 }
 
 async function choosePhoto() {
@@ -43,10 +53,13 @@ describe("TryOnStudio", () => {
     m.shrinkPhoto.mockResolvedValue(SMALL);
     m.createTryOnAction.mockResolvedValue({ error: null, tryOnId: "65f0c0ffee0000000000abcd" });
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:preview"), revokeObjectURL: vi.fn() }));
+    progress = { kind: "waiting", status: "PENDING", slow: false };
+    m.useTryOnStatus.mockImplementation((id: string | null) => (id ? progress : null));
   });
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    window.history.replaceState(null, "", "/tryon"); // each test starts without ?tryon=
   });
 
   it("shows the garments with the chosen one selected, and lets you pick another", () => {
@@ -90,7 +103,8 @@ describe("TryOnStudio", () => {
     const formData = m.createTryOnAction.mock.calls[0][1] as FormData;
     expect(formData.get("productId")).toBe(PRODUCTS[1].id);
     expect(formData.get("photo")).toBe(SMALL);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("We're creating your try-on."));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Waiting to start…"));
+    expect(m.useTryOnStatus).toHaveBeenLastCalledWith("65f0c0ffee0000000000abcd"); // the loading screen watches it
     expect(screen.getByRole("button", { name: "Try on Summer Dress" })).toBeDisabled(); // no double start
     // Locked after the start, so Retake or another garment can't leave a dead end.
     expect(screen.getByRole("button", { name: "Retake" })).toBeDisabled();
@@ -129,6 +143,95 @@ describe("TryOnStudio", () => {
       expect(screen.getByRole("button", { name: "Use camera" })).toBeInTheDocument();
       expect(screen.getByLabelText("Choose a photo")).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: "2. Add a photo of yourself" })).toHaveFocus();
+    });
+  });
+
+  describe("the loading screen (task 43)", () => {
+    const TRYON_ID = "65f0c0ffee0000000000abcd";
+
+    async function startTryOn() {
+      renderStudio();
+      await choosePhoto();
+      fireEvent.click(screen.getByRole("button", { name: "Try on Linen Shirt" }));
+      await waitFor(() => expect(m.useTryOnStatus).toHaveBeenLastCalledWith(TRYON_ID));
+    }
+
+    it("puts the try-on in the address, so a refresh keeps the loading screen", async () => {
+      await startTryOn();
+      // The address is set in an effect, which runs after the render that starts watching: wait for it.
+      await waitFor(() => expect(window.location.search).toBe(`?tryon=${TRYON_ID}`));
+    });
+
+    it("says it's creating the try-on, with a spinner", async () => {
+      progress = { kind: "waiting", status: "PROCESSING", slow: false };
+      await startTryOn();
+      expect(screen.getByRole("status")).toHaveTextContent("Creating your try-on… This can take a minute.");
+      expect(document.querySelector(".animate-spin")).not.toBeNull();
+    });
+
+    it("when it's slow, says so and offers the history page", async () => {
+      progress = { kind: "waiting", status: "PROCESSING", slow: true };
+      await startTryOn();
+      expect(screen.getByRole("status")).toHaveTextContent("It's taking longer than usual.");
+      expect(screen.getByRole("link", { name: "your history" })).toHaveAttribute("href", "/history");
+    });
+
+    it("when it's done, opens the result page once, replacing this page in the history (so Back can't bounce)", async () => {
+      progress = { kind: "done", shareId: "Zm9vYmFyYmF6cXV4MTIzNA" };
+      await startTryOn();
+      await waitFor(() => expect(m.navigate).toHaveBeenCalledWith("/tryon/Zm9vYmFyYmF6cXV4MTIzNA"));
+      expect(m.navigate).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("status")).toHaveTextContent("Your try-on is ready. Opening it…");
+    });
+
+    it("when it failed, says why, and Try again goes back to the photo (kept) with the address cleaned up", async () => {
+      progress = { kind: "failed", message: "Try-on is busy right now. Please try again later." };
+      await startTryOn();
+      expect(screen.getByRole("alert")).toHaveTextContent("Try-on is busy right now. Please try again later.");
+      expect(document.querySelector(".animate-spin")).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      expect(m.useTryOnStatus).toHaveBeenLastCalledWith(null); // stopped watching
+      expect(screen.getByRole("button", { name: "Try on Linen Shirt" })).toBeEnabled(); // same photo, ready to go
+      expect(screen.getByRole("button", { name: "Linen Shirt" })).toBeEnabled();
+      expect(screen.getByRole("status")).toHaveTextContent("");
+      expect(window.location.search).toBe("");
+      expect(screen.getByRole("heading", { name: "2. Add a photo of yourself" })).toHaveFocus(); // not lost to the page top
+    });
+
+    it("never goes back to a dismissed try-on from the address, even after a later start fails", async () => {
+      const B = "65f0c0ffee0000000000bbbb";
+      progress = { kind: "failed", message: "Try-on is busy right now. Please try again later." };
+      m.createTryOnAction
+        .mockResolvedValueOnce({ error: null, tryOnId: B })
+        .mockResolvedValueOnce({ error: "We couldn't upload your image. Please try again.", tryOnId: null });
+      renderStudio(PRODUCTS[0].id, TRYON_ID); // A, from ?tryon= after a refresh
+      fireEvent.click(screen.getByRole("button", { name: "Try again" })); // dismiss A
+      await choosePhoto();
+      fireEvent.click(screen.getByRole("button", { name: "Try on Linen Shirt" })); // B starts, then fails
+      await waitFor(() => expect(m.useTryOnStatus).toHaveBeenLastCalledWith(B));
+      fireEvent.click(screen.getByRole("button", { name: "Try again" })); // dismiss B
+      fireEvent.click(screen.getByRole("button", { name: "Try on Linen Shirt" })); // C can't start
+      await waitFor(() => expect(screen.getByText("We couldn't upload your image. Please try again.")).toBeInTheDocument());
+      expect(m.useTryOnStatus).toHaveBeenLastCalledWith(null); // not A again
+      expect(window.location.search).toBe("");
+    });
+
+    it("when it can't be checked any more, points to the history page", async () => {
+      progress = { kind: "lost", message: "We couldn't check your try-on. It will be in your history when it's ready." };
+      await startTryOn();
+      expect(screen.getByRole("alert")).toHaveTextContent("We couldn't check your try-on.");
+      expect(screen.getByRole("link", { name: "Go to your history" })).toHaveAttribute("href", "/history");
+      expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+    });
+
+    it("after a refresh (?tryon=<id>), watches that try-on straight away, with the photo choices locked", () => {
+      window.history.replaceState(null, "", `/tryon?tryon=${TRYON_ID}`);
+      renderStudio(PRODUCTS[0].id, TRYON_ID);
+      expect(m.useTryOnStatus).toHaveBeenLastCalledWith(TRYON_ID);
+      expect(screen.getByRole("status")).toHaveTextContent("Waiting to start…");
+      expect(screen.getByLabelText("Choose a photo")).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Linen Shirt" })).toBeDisabled();
     });
   });
 

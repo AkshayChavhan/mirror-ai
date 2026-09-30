@@ -13,7 +13,10 @@ type Props = { searchParams: Promise<{ [key: string]: string | string[] | undefi
 export default async function TryOnPage({ searchParams }: Props) {
   await requireUser(); // first: signed-out visitors go to sign-in before any data is read
 
-  const { product: wanted } = await searchParams;
+  const { product: wanted, tryon } = await searchParams;
+  // ?tryon=<id>: a try-on already started, so a refresh keeps the loading screen (task 43). Only an id-shaped
+  // value is passed on; the status endpoint still checks it's this user's.
+  const initialTryOnId = typeof tryon === "string" && /^[a-f0-9]{24}$/i.test(tryon) ? tryon : null;
   let products: Product[] = [];
   let error: string | null = null;
   try {
@@ -43,7 +46,7 @@ export default async function TryOnPage({ searchParams }: Props) {
           </Link>
         </p>
       ) : (
-        <TryOnStudio products={studioProducts} initialProductId={initialProductId} />
+        <TryOnStudio products={studioProducts} initialProductId={initialProductId} initialTryOnId={initialTryOnId} />
       )}
     </main>
   );

@@ -7,8 +7,21 @@ vi.mock("@/lib/auth", () => ({ requireUser: m.requireUser }));
 vi.mock("@/lib/products", () => ({ listActiveProducts: m.listActiveProducts }));
 // The studio is tested in TryOnStudio.test.tsx; here we only check what the page hands it.
 vi.mock("./TryOnStudio", () => ({
-  default: ({ products, initialProductId }: { products: unknown[]; initialProductId: string }) => (
-    <div data-testid="studio" data-products={JSON.stringify(products)} data-initial={initialProductId} />
+  default: ({
+    products,
+    initialProductId,
+    initialTryOnId,
+  }: {
+    products: unknown[];
+    initialProductId: string;
+    initialTryOnId: string | null;
+  }) => (
+    <div
+      data-testid="studio"
+      data-products={JSON.stringify(products)}
+      data-initial={initialProductId}
+      data-tryon={String(initialTryOnId)}
+    />
   ),
 }));
 
@@ -68,6 +81,20 @@ describe("/tryon", () => {
   ])("falls back to the first garment for %s", async (_case, search) => {
     await renderPage(search);
     expect(screen.getByTestId("studio")).toHaveAttribute("data-initial", A.id);
+  });
+
+  it("hands a started try-on from ?tryon= to the loading screen (task 43)", async () => {
+    await renderPage({ tryon: "65f0c0ffee0000000000abcd" });
+    expect(screen.getByTestId("studio")).toHaveAttribute("data-tryon", "65f0c0ffee0000000000abcd");
+  });
+
+  it.each([
+    ["no ?tryon", {}],
+    ["a value that isn't an id", { tryon: "../../admin" }],
+    ["a repeated ?tryon", { tryon: ["65f0c0ffee0000000000abcd", "65f0c0ffee0000000000abce"] }],
+  ])("passes no try-on for %s", async (_case, search) => {
+    await renderPage(search);
+    expect(screen.getByTestId("studio")).toHaveAttribute("data-tryon", "null");
   });
 
   it("says so, with a way back, when there are no garments", async () => {
