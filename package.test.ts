@@ -19,3 +19,9 @@ describe("package.json db:push script", () => {
     expect(pkg.scripts["db:push"]).not.toContain(flag);
   });
 });
+
+describe("package.json MediaPipe WASM copy (task 64)", () => {
+  it.each(["predev", "prebuild"])("%s copies the WASM into public/ first, so dev and build can serve it", (script) => {
+    expect(pkg.scripts[script]).toBe("node scripts/copy-mediapipe-wasm.mts");
+  });
+});

@@ -47,3 +47,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# MediaPipe WASM, copied from node_modules before dev/build (scripts/copy-mediapipe-wasm.mts, task 64)
+/public/mediapipe/wasm/
