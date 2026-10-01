@@ -9,10 +9,10 @@ import { clerkMiddleware } from "@clerk/nextjs/server";
 export default clerkMiddleware();
 
 // Clerk's recommended matcher: skip Next internals and static files, always run for API routes
-// and Clerk's own endpoints.
+// and Clerk's own endpoints. Also skips MediaPipe's model (.task) and WASM (task 64): ~29 MB of static files.
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|wasm|task)).*)",
     "/(api|trpc)(.*)",
     "/__clerk/(.*)",
   ],

@@ -6,7 +6,9 @@
     "node": "^22.22.2 || ^24.15.0 || >=26"
   },
   "scripts": {
+    "predev": "node scripts/copy-mediapipe-wasm.mts",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-mediapipe-wasm.mts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -19,6 +21,7 @@
   "dependencies": {
     "@clerk/nextjs": "^7.9.7",
     "@gradio/client": "^2.7.0",
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@prisma/client": "^6.19.3",
     "cloudinary": "^2.11.0",
     "inngest": "^4.21.0",
