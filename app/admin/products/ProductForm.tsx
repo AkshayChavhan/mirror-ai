@@ -47,7 +47,7 @@ export default function ProductForm({ action, product }: Props) {
           className="rounded border px-3 py-2"
         />
         <span id="product-image-hint" className="text-sm text-zinc-500">
-          A clean garment photo on a plain background, up to 5 MB.
+          A clean garment photo on a plain background, at least 512 × 512 pixels, up to 5 MB.
         </span>
       </div>
 

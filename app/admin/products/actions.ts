@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { ImageUploadError, uploadImage, uploadModel } from "@/lib/cloudinary";
+import { ImageUploadError, deleteImage, uploadImage, uploadModel } from "@/lib/cloudinary";
 import { GarmentModelError, MAX_MODEL_BYTES, MODEL_FOLDER, checkGarmentModel } from "@/lib/garment-model";
 import { deleteGarmentModel, deleteProductAndImages } from "@/lib/product-cleanup";
 import {
@@ -22,6 +22,8 @@ export type ProductFormState = { error: string | null };
 
 // Not exported: a "use server" file may only export async functions (and types).
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** Garment images smaller than this (width or height) give poor try-ons: a 161×148 one did (task 68). */
+const MIN_IMAGE_SIDE = 512;
 const GARMENT_FOLDER = "mirror-ai/garments";
 
 class FormError extends Error {}
@@ -51,7 +53,7 @@ function readFields(formData: FormData): Omit<ProductInput, "imageUrl" | "modelU
   };
 }
 
-/** Uploads the chosen image (if any) and returns its URL. */
+/** Uploads the chosen image (if any) and returns its URL. A too-small image is deleted again and refused. */
 async function uploadChosenImage(formData: FormData, required: boolean): Promise<string | undefined> {
   const file = formData.get("image");
   const chosen = file instanceof File && file.size > 0;
@@ -63,7 +65,14 @@ async function uploadChosenImage(formData: FormData, required: boolean): Promise
   if (file.size > MAX_IMAGE_BYTES) throw new FormError("The garment image must be 5 MB or smaller.");
 
   const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-  const { url } = await uploadImage(`data:${file.type};base64,${base64}`, GARMENT_FOLDER);
+  const { url, publicId, width, height } = await uploadImage(`data:${file.type};base64,${base64}`, GARMENT_FOLDER);
+  // Cloudinary measured it while uploading (so any image format works). Too small: don't keep it.
+  if (width < MIN_IMAGE_SIDE || height < MIN_IMAGE_SIDE) {
+    await deleteImage(publicId); // never throws; a failure is logged
+    throw new FormError(
+      `The garment image must be at least ${MIN_IMAGE_SIDE} × ${MIN_IMAGE_SIDE} pixels (this one is ${width} × ${height}). Small images give poor try-ons.`,
+    );
+  }
   return url;
 }
 
