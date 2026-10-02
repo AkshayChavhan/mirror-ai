@@ -1,4 +1,5 @@
-import { deleteImage, publicIdFromUrl } from "./cloudinary";
+import { deleteImage, deleteModel, modelPublicIdFromUrl, publicIdFromUrl } from "./cloudinary";
+import { MODEL_FOLDER } from "./garment-model";
 import { prisma } from "./prisma";
 import { ProductError, deleteProduct } from "./products";
 
@@ -25,6 +26,19 @@ async function deleteOwnImage(url: string, folders: string[], what: string): Pro
   return deleteImage(publicId); // never throws; "not found" counts as deleted
 }
 
+/**
+ * Deletes a garment's 3D model (task 67) if it's one of ours, in the models folder. Like deleteOwnImage: true
+ * when it's gone (or isn't ours: logged and skipped), false when Cloudinary failed. Never throws.
+ */
+export async function deleteGarmentModel(url: string): Promise<boolean> {
+  const publicId = modelPublicIdFromUrl(url);
+  if (!publicId || !publicId.startsWith(`${MODEL_FOLDER}/`)) {
+    console.error("[product-cleanup] Skipped a 3D model outside its folder.");
+    return true;
+  }
+  return deleteModel(publicId);
+}
+
 /** Deletes the try-on photos at `urls`, a few at a time. Returns how many couldn't be deleted. */
 async function deleteTryOnPhotos(urls: string[]): Promise<number> {
   let failed = 0;
@@ -39,21 +53,21 @@ async function deleteTryOnPhotos(urls: string[]): Promise<number> {
 
 /**
  * Deletes a product: it hides it first (so no new try-on can start meanwhile), then deletes its try-ons'
- * photos (person + result), then its garment image, then the row (which cascades to its try-ons and
+ * photos (person + result), then its garment image and 3D model, then the row (which cascades to its try-ons and
  * wishlist items). If any try-on photo can't be deleted, it stops there and throws, so the admin can retry:
  * rows must never disappear while their photos remain. The product then stays hidden, not deleted.
  */
 export async function deleteProductAndImages(id: string): Promise<void> {
   if (!OBJECT_ID.test(id)) throw new ProductError("NOT_FOUND", "That product doesn't exist.");
 
-  let product: { imageUrl: string; tryOns: { personUrl: string; resultUrl: string | null }[] } | null;
+  let product: { imageUrl: string; modelUrl: string | null; tryOns: { personUrl: string; resultUrl: string | null }[] } | null;
   try {
     // Hide it first: app/tryon/actions.ts refuses hidden products, so no new try-on can start once it's
     // hidden (a request already past its check can still finish; see the learning doc's Gotchas).
     await prisma.product.updateMany({ where: { id }, data: { isActive: false } });
     product = await prisma.product.findUnique({
       where: { id },
-      select: { imageUrl: true, tryOns: { select: { personUrl: true, resultUrl: true } } },
+      select: { imageUrl: true, modelUrl: true, tryOns: { select: { personUrl: true, resultUrl: true } } },
     });
   } catch (error) {
     console.error("[product-cleanup] Hiding/loading the product failed:", error);
@@ -72,9 +86,12 @@ export async function deleteProductAndImages(id: string): Promise<void> {
     );
   }
 
-  // 2. The garment image: not personal, so a failure is logged but doesn't block the delete.
+  // 2. The garment image and 3D model: not personal, so a failure is logged but doesn't block the delete.
   if (!(await deleteOwnImage(product.imageUrl, [GARMENT_FOLDER], "garment"))) {
     console.error(`[product-cleanup] The garment image of product ${id} couldn't be deleted.`);
+  }
+  if (product.modelUrl && !(await deleteGarmentModel(product.modelUrl))) {
+    console.error(`[product-cleanup] The 3D model of product ${id} couldn't be deleted.`);
   }
 
   // 3. The row, cascading to its try-ons and wishlist items.

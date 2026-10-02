@@ -5,6 +5,10 @@ import { contentSecurityPolicy } from "./lib/csp";
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? "";
 const cloudPath = /^[\w-]+$/.test(cloudName) ? `/${cloudName}/**` : "/**";
 
+// The biggest form: an admin's garment image and 3D model (task 67), up to 5MB each (checked in
+// app/admin/products/actions.ts), plus the other fields.
+const ADMIN_FORM_LIMIT = "11mb";
+
 const nextConfig: NextConfig = {
   images: {
     // next/image only optimises external images from allowed hosts. Product images live on Cloudinary.
@@ -28,10 +32,11 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Default is 1MB. Admin garment images may be up to 5MB (checked in app/admin/products/actions.ts),
-      // plus the other form fields.
-      bodySizeLimit: "6mb",
+      bodySizeLimit: ADMIN_FORM_LIMIT, // default 1MB
     },
+    // proxy.ts (Clerk) runs on the admin pages too, and Next copies each request body for it: by default only
+    // the first 10MB, so a bigger form reached the action cut off ("Unexpected end of form", a raw 500).
+    proxyClientMaxBodySize: ADMIN_FORM_LIMIT,
   },
 };
 

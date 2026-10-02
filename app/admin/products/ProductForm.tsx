@@ -7,7 +7,7 @@ import type { ProductFormState } from "./actions";
 type Props = {
   action: (prev: ProductFormState, formData: FormData) => Promise<ProductFormState>;
   /** Present when editing; absent when creating. */
-  product?: Pick<Product, "name" | "category" | "price" | "description" | "buyLink" | "isActive" | "imageUrl">;
+  product?: Pick<Product, "name" | "category" | "price" | "description" | "buyLink" | "isActive" | "imageUrl" | "modelUrl">;
 };
 
 const INITIAL: ProductFormState = { error: null };
@@ -49,6 +49,31 @@ export default function ProductForm({ action, product }: Props) {
         <span id="product-image-hint" className="text-sm text-zinc-500">
           A clean garment photo on a plain background, up to 5 MB.
         </span>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="product-model">
+          {product?.modelUrl ? "Replace 3D model (.glb, optional)" : "3D model (.glb, optional)"}
+        </label>
+        <input
+          id="product-model"
+          name="model"
+          type="file"
+          accept=".glb,model/gltf-binary"
+          aria-describedby="product-model-hint"
+          className="rounded border px-3 py-2"
+        />
+        <span id="product-model-hint" className="text-sm text-zinc-500">
+          {product?.modelUrl ? "This garment has a 3D model. " : ""}
+          For Live 3D: the garment rigged to a Mixamo skeleton, exported as glTF Binary, up to 5 MB. Without
+          one, Live 3D uses a built-in shape.
+        </span>
+        {product?.modelUrl && (
+          <label className="flex items-center gap-2">
+            <input name="removeModel" type="checkbox" />
+            Remove the 3D model
+          </label>
+        )}
       </div>
 
       <label className="flex flex-col gap-1">

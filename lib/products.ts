@@ -21,6 +21,8 @@ export class ProductError extends Error {
 export type ProductInput = {
   name: string;
   imageUrl: string;
+  /** The rigged 3D model (task 67); null removes it. */
+  modelUrl?: string | null;
   category: Category;
   price?: number | null;
   description?: string | null;
@@ -66,6 +68,11 @@ export function validateProductInput(input: Partial<ProductInput>, partial = fal
     const imageUrl = text(input.imageUrl, "Please add a product image.");
     if (!imageUrl || !isHttpsUrl(imageUrl)) invalid("Please add a product image.");
     out.imageUrl = imageUrl;
+  }
+  if (input.modelUrl !== undefined) {
+    const modelUrl = text(input.modelUrl, "The 3D model's address isn't valid.") || null;
+    if (modelUrl && !isHttpsUrl(modelUrl)) invalid("The 3D model's address isn't valid.");
+    out.modelUrl = modelUrl;
   }
   if (!partial || input.category !== undefined) {
     const category: unknown = input.category;

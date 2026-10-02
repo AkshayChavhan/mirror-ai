@@ -44,6 +44,7 @@ A virtual try-on web app. A signed-in user picks a garment, captures or uploads 
 | `id` | ObjectId | |
 | `name` | string | required |
 | `imageUrl` | string | required. A clean garment image on a plain background, stored on Cloudinary |
+| `modelUrl` | string | optional. A rigged 3D model (`.glb`, Mixamo skeleton, up to 5 MB) on Cloudinary, for Live 3D (task 67) |
 | `category` | enum `UPPER` / `LOWER` / `OVERALL` | required. Maps to the try-on model's cloth type |
 | `price` | float | optional |
 | `description` | string | optional |
