@@ -21,9 +21,34 @@ export type PoseTracker = {
   close(): void;
 };
 
+/** WebGL drawn by software, with no real GPU (e.g. Chrome's SwiftShader, Linux's llvmpipe). */
+const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i;
+
+/**
+ * Where MediaPipe should run: the GPU, unless the browser's WebGL is software only. There its GPU path is
+ * emulated on the CPU and freezes the page (22–60 s for the first frame, then ~0.5 s a frame, measured in
+ * headless Chrome), while its own CPU path runs at video speed. Unknown renderer (null): try the GPU.
+ */
+export function preferredDelegate(renderer: string | null): "GPU" | "CPU" {
+  return renderer !== null && SOFTWARE_RENDERER.test(renderer) ? "CPU" : "GPU";
+}
+
+/** The name of the browser's WebGL renderer, or null when WebGL (or the name) isn't available. */
+function webglRendererName(): string | null {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    const info = gl?.getExtension("WEBGL_debug_renderer_info");
+    const name: unknown = gl && info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : null;
+    gl?.getExtension("WEBGL_lose_context")?.loseContext(); // browsers allow only a few live contexts
+    return typeof name === "string" ? name : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Loads MediaPipe (only when Live 3D is opened: it's a separate chunk) and the pose model. Uses the GPU when
- * the browser allows it, otherwise the CPU. Throws if neither works; the caller shows a friendly message.
+ * the browser has a real one, otherwise the CPU. Throws if neither works; the caller shows a friendly message.
  */
 export async function createPoseTracker(): Promise<PoseTracker> {
   const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
@@ -39,11 +64,15 @@ export async function createPoseTracker(): Promise<PoseTracker> {
     });
 
   let landmarker: PoseLandmarker;
-  try {
-    landmarker = await create("GPU");
-  } catch (gpuError) {
-    console.warn("[live] Body tracking on the GPU failed; trying the CPU.", gpuError);
+  if (preferredDelegate(webglRendererName()) === "CPU") {
     landmarker = await create("CPU");
+  } else {
+    try {
+      landmarker = await create("GPU");
+    } catch (gpuError) {
+      console.warn("[live] Body tracking on the GPU failed; trying the CPU.", gpuError);
+      landmarker = await create("CPU");
+    }
   }
 
   let lastTime = -1;

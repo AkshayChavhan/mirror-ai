@@ -59,13 +59,13 @@ describe("/tryon", () => {
     expect(m.listActiveProducts).not.toHaveBeenCalled();
   });
 
-  it("passes only each garment's id, name and image to the browser", async () => {
+  it("passes only each garment's id, name, image and category (for Live 3D) to the browser", async () => {
     await renderPage();
     expect(screen.getByRole("heading", { level: 1, name: "Try it on" })).toBeInTheDocument();
     const products = JSON.parse(screen.getByTestId("studio").getAttribute("data-products") ?? "[]");
     expect(products).toEqual([
-      { id: A.id, name: "shirt", imageUrl: A.imageUrl },
-      { id: B.id, name: "dress", imageUrl: B.imageUrl },
+      { id: A.id, name: "shirt", imageUrl: A.imageUrl, category: "UPPER" },
+      { id: B.id, name: "dress", imageUrl: B.imageUrl, category: "UPPER" },
     ]);
   });
 

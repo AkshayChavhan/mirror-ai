@@ -1,15 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { startTransition, useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createTryOnAction, type TryOnFormState } from "./actions";
 import CameraCapture from "./CameraCapture";
+import type { GarmentKind } from "./live/garmentTemplates";
 import { shrinkPhoto } from "./shrinkPhoto";
 import { useTryOnStatus, type TryOnProgress } from "./useTryOnStatus";
 
-export type StudioProduct = { id: string; name: string; imageUrl: string };
+// Live 3D (task 66) loads only when it's opened: three.js and MediaPipe are big, and most visits don't need them.
+const LiveTryOn = dynamic(() => import("./live/LiveTryOn"), {
+  ssr: false,
+  loading: () => <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading Live 3D…</p>,
+});
+
+export type StudioProduct = { id: string; name: string; imageUrl: string; category: GarmentKind };
 
 type Props = {
   products: StudioProduct[];
@@ -51,6 +59,7 @@ export default function TryOnStudio({ products, initialProductId, initialTryOnId
   const [preparing, setPreparing] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
   const canUseCamera = useSyncExternalStore(noSubscribe, browserHasCamera, serverHasCamera);
   // When the camera closes or Try again is pressed, those buttons disappear: move focus to the photo step's
   // heading, not the page top.
@@ -80,15 +89,20 @@ export default function TryOnStudio({ products, initialProductId, initialTryOnId
   }, [progress, router]);
 
   useEffect(() => {
-    if (!cameraOpen && refocusPhotoStep.current) {
+    if (!cameraOpen && !liveOpen && refocusPhotoStep.current) {
       refocusPhotoStep.current = false;
       photoHeadingRef.current?.focus();
     }
-  }, [cameraOpen, activeId]);
+  }, [cameraOpen, liveOpen, activeId]);
 
   function closeCamera() {
     refocusPhotoStep.current = true;
     setCameraOpen(false);
+  }
+
+  function closeLive() {
+    refocusPhotoStep.current = true;
+    setLiveOpen(false);
   }
 
   function tryAgain() {
@@ -123,6 +137,12 @@ export default function TryOnStudio({ products, initialProductId, initialTryOnId
 
   async function onCapture(file: File) {
     closeCamera();
+    await preparePhoto(file);
+  }
+
+  /** "Take photo" in Live 3D: the same preview → Try on flow as the camera (both modes kept). */
+  async function onLiveCapture(file: File) {
+    closeLive();
     await preparePhoto(file);
   }
 
@@ -167,7 +187,9 @@ export default function TryOnStudio({ products, initialProductId, initialTryOnId
         <h2 id="photo-heading" ref={photoHeadingRef} tabIndex={-1} className="text-lg font-medium focus:outline-none">
           2. Add a photo of yourself
         </h2>
-        {cameraOpen ? (
+        {liveOpen && selected ? (
+          <LiveTryOn product={selected} onCapture={onLiveCapture} onCancel={closeLive} />
+        ) : cameraOpen ? (
           <CameraCapture onCapture={onCapture} onCancel={closeCamera} />
         ) : photo ? (
           // The user's own photo, from their device: a blob: URL, so a plain <img> (next/image can't optimize it).
@@ -183,6 +205,16 @@ export default function TryOnStudio({ products, initialProductId, initialTryOnId
                 className="rounded bg-black px-4 py-2 text-white disabled:opacity-50 dark:bg-white dark:text-black"
               >
                 Use camera
+              </button>
+            )}
+            {canUseCamera && (
+              <button
+                type="button"
+                onClick={() => setLiveOpen(true)}
+                disabled={preparing || started}
+                className="rounded border border-black px-4 py-2 disabled:opacity-50 dark:border-white"
+              >
+                Live 3D
               </button>
             )}
             <label className="rounded border px-4 py-2 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-black dark:has-[:focus-visible]:ring-white">
