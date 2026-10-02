@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { contentSecurityPolicy } from "./lib/csp";
 
 // Only a real cloud name (letters, digits, - and _), not the "<placeholder>" from .env.example.
 const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? "";
@@ -15,6 +16,15 @@ const nextConfig: NextConfig = {
         pathname: cloudPath,
       },
     ],
+  },
+  // Every page: block MediaPipe's usage metrics to Google (Live 3D, task 66). Not just /tryon: the app's
+  // links reach it without a new page load, and the browser keeps the first page's policy (lib/csp.ts).
+  async headers() {
+    const policy = contentSecurityPolicy(
+      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      process.env.NODE_ENV === "development",
+    );
+    return [{ source: "/:path*", headers: [{ key: "Content-Security-Policy", value: policy }] }];
   },
   experimental: {
     serverActions: {

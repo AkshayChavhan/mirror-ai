@@ -14,6 +14,21 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: m.navigate }) }
 vi.mock("./useTryOnStatus", () => ({ useTryOnStatus: m.useTryOnStatus }));
 type Progress = import("./useTryOnStatus").TryOnProgress;
 let progress: Progress = { kind: "waiting", status: "PENDING", slow: false };
+// Live 3D itself is tested in live/LiveTryOn.test.tsx; here a stand-in reports the product and "takes" a photo.
+const LIVE_PHOTO = new File(["live"], "camera.jpg", { type: "image/jpeg" });
+vi.mock("./live/LiveTryOn", () => ({
+  default: ({ product, onCapture, onCancel }: { product: { name: string; category: string }; onCapture: (photo: File) => void; onCancel: () => void }) => (
+    <div>
+      <p>{`Live 3D for ${product.name} (${product.category})`}</p>
+      <button type="button" onClick={() => onCapture(LIVE_PHOTO)}>
+        Fake live photo
+      </button>
+      <button type="button" onClick={onCancel}>
+        Fake live cancel
+      </button>
+    </div>
+  ),
+}));
 // The camera itself is tested in CameraCapture.test.tsx; here a stand-in "takes" or cancels a photo.
 const CAMERA_PHOTO = new File(["frame"], "camera.jpg", { type: "image/jpeg" });
 vi.mock("./CameraCapture", () => ({
@@ -32,8 +47,8 @@ vi.mock("./CameraCapture", () => ({
 import TryOnStudio, { type StudioProduct } from "./TryOnStudio";
 
 const PRODUCTS: StudioProduct[] = [
-  { id: "65f0c0ffee0000000000aaa1", name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png" },
-  { id: "65f0c0ffee0000000000aaa2", name: "Summer Dress", imageUrl: "https://res.cloudinary.com/demo/image/upload/dress.png" },
+  { id: "65f0c0ffee0000000000aaa1", name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png", category: "UPPER" },
+  { id: "65f0c0ffee0000000000aaa2", name: "Summer Dress", imageUrl: "https://res.cloudinary.com/demo/image/upload/dress.png", category: "OVERALL" },
 ];
 const SMALL = new File(["small"], "photo.jpg", { type: "image/jpeg" });
 
@@ -109,6 +124,46 @@ describe("TryOnStudio", () => {
     // Locked after the start, so Retake or another garment can't leave a dead end.
     expect(screen.getByRole("button", { name: "Retake" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Linen Shirt" })).toBeDisabled();
+  });
+
+  describe("Live 3D (task 66)", () => {
+    function withCamera() {
+      vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { mediaDevices: { getUserMedia: vi.fn() } }));
+    }
+
+    it("isn't offered when the browser can't use a camera", () => {
+      renderStudio();
+      expect(screen.queryByRole("button", { name: "Live 3D" })).not.toBeInTheDocument();
+    });
+
+    it("opens Live 3D for the chosen garment (with its category), loading it only then", async () => {
+      withCamera();
+      renderStudio();
+      fireEvent.click(screen.getByRole("button", { name: "Summer Dress" }));
+      fireEvent.click(screen.getByRole("button", { name: "Live 3D" }));
+      expect(await screen.findByText("Live 3D for Summer Dress (OVERALL)")).toBeInTheDocument();
+      expect(screen.queryByLabelText("Choose a photo")).not.toBeInTheDocument();
+    });
+
+    it("its photo gets the same shrink, preview and Try on as the camera's (both modes kept)", async () => {
+      withCamera();
+      renderStudio();
+      fireEvent.click(screen.getByRole("button", { name: "Live 3D" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Fake live photo" }));
+      expect(await screen.findByRole("img", { name: "Your photo" })).toBeInTheDocument();
+      expect(m.shrinkPhoto).toHaveBeenCalledWith(LIVE_PHOTO);
+      expect(screen.getByRole("button", { name: "Try on Linen Shirt" })).toBeEnabled();
+      expect(screen.getByRole("heading", { name: "2. Add a photo of yourself" })).toHaveFocus();
+    });
+
+    it("Cancel goes back to the photo choices, with focus on the step", async () => {
+      withCamera();
+      renderStudio();
+      fireEvent.click(screen.getByRole("button", { name: "Live 3D" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Fake live cancel" }));
+      expect(screen.getByRole("button", { name: "Live 3D" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "2. Add a photo of yourself" })).toHaveFocus();
+    });
   });
 
   describe("the camera (task 42)", () => {

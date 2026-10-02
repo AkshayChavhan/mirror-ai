@@ -34,3 +34,32 @@ describe("next.config.ts images.remotePatterns", () => {
     ]);
   });
 });
+
+describe("next.config.ts headers (task 66)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("sends every page a Content-Security-Policy that only allows our app and Clerk (blocks MediaPipe's metrics)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", `pk_test_${Buffer.from("example-instance-1.clerk.accounts.dev$").toString("base64")}`);
+    vi.resetModules();
+    const config = (await import("./next.config")).default;
+    const rules = (await config.headers?.()) ?? [];
+    expect(rules).toEqual([
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "connect-src 'self' https://example-instance-1.clerk.accounts.dev https://clerk-telemetry.com",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("covers every page, not just /tryon: the app's links reach /tryon without a new page load", async () => {
+    vi.resetModules();
+    const config = (await import("./next.config")).default;
+    const sources = ((await config.headers?.()) ?? []).map((rule) => rule.source);
+    expect(sources).toEqual(["/:path*"]); // also matches "/" (zero segments)
+  });
+});
