@@ -73,17 +73,48 @@ export async function uploadImage(file: string, folder: string, options: UploadO
   };
 }
 
+/** A stored 3D garment model (task 67). */
+export type UploadedModel = { url: string; publicId: string };
+
+/**
+ * Uploads a 3D model (.glb) as a raw file, so Cloudinary stores its bytes exactly as they are. Check the
+ * bytes first (lib/garment-model.ts). Throws ImageUploadError (any upload problem) with a friendly message.
+ */
+export async function uploadModel(bytes: Uint8Array, folder: string): Promise<UploadedModel> {
+  if (bytes.byteLength === 0) throw new ImageUploadError("Please choose a 3D model to upload.");
+  configure();
+
+  let result: UploadApiResponse;
+  try {
+    const base64 = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
+    result = await cloudinary.uploader.upload(`data:model/gltf-binary;base64,${base64}`, { folder, resource_type: "raw" });
+  } catch (error) {
+    console.error("[cloudinary] Model upload failed:", error);
+    throw new ImageUploadError("We couldn't upload the 3D model. Please try again.", { cause: error });
+  }
+  return { url: result.secure_url, publicId: result.public_id };
+}
+
 /**
  * Deletes an image, and clears it from Cloudinary's CDN cache so its URL stops working.
  * Never throws: returns false (and logs) when it couldn't delete, so callers that are already
  * handling another error can clean up best-effort. "not found" counts as deleted: it's gone.
  */
-export async function deleteImage(publicId: string): Promise<boolean> {
+export function deleteImage(publicId: string): Promise<boolean> {
+  return deleteStored(publicId, "image");
+}
+
+/** Deletes a 3D model (a raw file), like deleteImage: never throws, false when it couldn't delete. */
+export function deleteModel(publicId: string): Promise<boolean> {
+  return deleteStored(publicId, "raw");
+}
+
+async function deleteStored(publicId: string, resourceType: "image" | "raw"): Promise<boolean> {
   if (!publicId.trim()) return false;
   try {
     configure();
     const response: unknown = await cloudinary.uploader.destroy(publicId, {
-      resource_type: "image",
+      resource_type: resourceType,
       invalidate: true,
     });
     const result = typeof response === "object" && response !== null && "result" in response ? response.result : null;
@@ -150,6 +181,28 @@ export function publicIdFromUrl(url: string): string | null {
   }
   if (parsed.protocol !== "https:" || parsed.hostname !== "res.cloudinary.com") return null;
   const match = parsed.pathname.match(/^\/[^/]+\/image\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null; // a malformed %-escape
+  }
+}
+
+/**
+ * The public id inside a Cloudinary raw-file URL as uploadModel stores it
+ * (https://res.cloudinary.com/<cloud>/raw/upload/[v123/]<publicId>), or null if it isn't one.
+ * Unlike an image's, a raw file's public id is the whole rest of the path, extension included.
+ */
+export function modelPublicIdFromUrl(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== "res.cloudinary.com") return null;
+  const match = parsed.pathname.match(/^\/[^/]+\/raw\/upload\/(?:v\d+\/)?(.+)$/);
   if (!match) return null;
   try {
     return decodeURIComponent(match[1]);

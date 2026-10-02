@@ -40,7 +40,7 @@ describe("generated Prisma client", () => {
 
   it("has the planned Product fields", () => {
     expect(Object.keys(Prisma.ProductScalarFieldEnum)).toEqual([
-      "id", "name", "imageUrl", "category", "price", "description", "buyLink", "isActive", "createdAt", "updatedAt",
+      "id", "name", "imageUrl", "modelUrl", "category", "price", "description", "buyLink", "isActive", "createdAt", "updatedAt",
     ]);
   });
 

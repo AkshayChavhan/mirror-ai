@@ -9,7 +9,17 @@ const { upload, destroy, resources, config } = vi.hoisted(() => ({
 }));
 vi.mock("cloudinary", () => ({ v2: { config, uploader: { upload, destroy }, api: { resources } } }));
 
-import { ImageUploadError, deleteImage, downloadUrl, listImages, publicIdFromUrl, uploadImage } from "./cloudinary";
+import {
+  ImageUploadError,
+  deleteImage,
+  deleteModel,
+  downloadUrl,
+  listImages,
+  modelPublicIdFromUrl,
+  publicIdFromUrl,
+  uploadImage,
+  uploadModel,
+} from "./cloudinary";
 
 const FILE = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -228,4 +238,111 @@ describe("downloadUrl", () => {
       expect(downloadUrl(url)).toBeNull();
     },
   );
+});
+
+describe("uploadModel (task 67)", () => {
+  const MODEL = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 2, 0, 0, 0]); // starts like a .glb ("glTF", version 2)
+
+  beforeEach(() => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "<test-cloud>");
+    vi.stubEnv("CLOUDINARY_API_KEY", "<test-key>");
+    vi.stubEnv("CLOUDINARY_API_SECRET", "<test-secret>");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    upload.mockReset();
+    config.mockReset();
+  });
+
+  it("uploads the bytes unchanged as a raw file to the given folder", async () => {
+    upload.mockResolvedValue({ secure_url: "https://res.cloudinary.com/test/raw/upload/v1/mirror-ai/models/m1", public_id: "mirror-ai/models/m1" });
+    await expect(uploadModel(MODEL, "mirror-ai/models")).resolves.toEqual({
+      url: "https://res.cloudinary.com/test/raw/upload/v1/mirror-ai/models/m1",
+      publicId: "mirror-ai/models/m1",
+    });
+    const [file, options] = upload.mock.calls[0] as [string, unknown];
+    expect(options).toEqual({ folder: "mirror-ai/models", resource_type: "raw" });
+    expect(file).toBe(`data:model/gltf-binary;base64,${Buffer.from(MODEL).toString("base64")}`);
+  });
+
+  it("sends only the model's own bytes when they're a view into a bigger buffer", async () => {
+    upload.mockResolvedValue({ secure_url: "https://x", public_id: "m" });
+    const padded = new Uint8Array(MODEL.length + 3);
+    padded.set(MODEL, 3);
+    await uploadModel(padded.subarray(3), "mirror-ai/models");
+    expect(upload.mock.calls[0][0]).toBe(`data:model/gltf-binary;base64,${Buffer.from(MODEL).toString("base64")}`);
+  });
+
+  it("refuses an empty file without calling Cloudinary", async () => {
+    await expect(uploadModel(new Uint8Array(), "mirror-ai/models")).rejects.toThrow("Please choose a 3D model to upload.");
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("fails with a friendly message when env vars are missing", async () => {
+    vi.stubEnv("CLOUDINARY_API_KEY", "");
+    await expect(uploadModel(MODEL, "mirror-ai/models")).rejects.toBeInstanceOf(ImageUploadError);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("hides provider errors from admins but logs them on the server", async () => {
+    const providerError = { message: "File size too large. Got 11000000. Maximum is 10485760.", http_code: 400 };
+    upload.mockRejectedValue(providerError);
+    const error = await uploadModel(MODEL, "mirror-ai/models").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ImageUploadError);
+    expect((error as ImageUploadError).message).toBe("We couldn't upload the 3D model. Please try again.");
+    expect(console.error).toHaveBeenCalledWith("[cloudinary] Model upload failed:", providerError);
+  });
+});
+
+describe("deleteModel (task 67)", () => {
+  beforeEach(() => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "<test-cloud>");
+    vi.stubEnv("CLOUDINARY_API_KEY", "<test-key>");
+    vi.stubEnv("CLOUDINARY_API_SECRET", "<test-secret>");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    destroy.mockReset();
+    config.mockReset();
+  });
+
+  it("deletes the raw file and clears it from the CDN cache; already gone counts as deleted", async () => {
+    destroy.mockResolvedValue({ result: "ok" });
+    await expect(deleteModel("mirror-ai/models/m1")).resolves.toBe(true);
+    expect(destroy).toHaveBeenCalledWith("mirror-ai/models/m1", { resource_type: "raw", invalidate: true });
+    destroy.mockResolvedValue({ result: "not found" });
+    await expect(deleteModel("mirror-ai/models/m1")).resolves.toBe(true);
+  });
+
+  it("never throws: returns false and logs when the call fails", async () => {
+    destroy.mockRejectedValue({ message: "Invalid Signature", http_code: 401 });
+    await expect(deleteModel("mirror-ai/models/m1")).resolves.toBe(false);
+    expect(console.error).toHaveBeenCalled();
+  });
+});
+
+describe("modelPublicIdFromUrl (task 67)", () => {
+  it.each([
+    ["a stored raw URL with a version", "https://res.cloudinary.com/demo/raw/upload/v1712345678/mirror-ai/models/abc123", "mirror-ai/models/abc123"],
+    ["a URL without a version", "https://res.cloudinary.com/demo/raw/upload/mirror-ai/models/abc123", "mirror-ai/models/abc123"],
+    ["an extension (part of a raw file's id)", "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/shirt.glb", "mirror-ai/models/shirt.glb"],
+  ])("reads the public id from %s", (_case, url, id) => {
+    expect(modelPublicIdFromUrl(url)).toBe(id);
+  });
+
+  it.each([
+    ["not a URL", "nope"],
+    ["plain http", "http://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/m"],
+    ["another host", "https://evil.example.com/demo/raw/upload/v1/mirror-ai/models/m"],
+    ["an image URL", "https://res.cloudinary.com/demo/image/upload/v1/mirror-ai/garments/a.png"],
+    ["a broken escape", "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/%E0%A4%A"],
+  ])("returns null for %s", (_case, url) => {
+    expect(modelPublicIdFromUrl(url)).toBeNull();
+  });
 });

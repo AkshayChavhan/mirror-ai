@@ -63,3 +63,17 @@ describe("next.config.ts headers (task 66)", () => {
     expect(sources).toEqual(["/:path*"]); // also matches "/" (zero segments)
   });
 });
+
+describe("next.config.ts server action body size (task 67)", () => {
+  it("fits an admin's 5 MB garment image AND 5 MB 3D model, plus the other fields", async () => {
+    vi.resetModules();
+    const config = (await import("./next.config")).default;
+    expect(config.experimental?.serverActions?.bodySizeLimit).toBe("11mb");
+  });
+
+  it("lets the same size through the proxy (proxy.ts), which otherwise keeps only the first 10 MB", async () => {
+    vi.resetModules();
+    const config = (await import("./next.config")).default;
+    expect(config.experimental?.proxyClientMaxBodySize).toBe("11mb");
+  });
+});

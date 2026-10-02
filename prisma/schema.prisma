@@ -30,6 +30,8 @@ model Product {
   name        String
   /// Clean garment image on a plain background, stored on Cloudinary.
   imageUrl    String
+  /// Optional rigged 3D model (.glb, Mixamo skeleton) on Cloudinary, for Live 3D (task 67).
+  modelUrl    String?
   category    Category
   price       Float?
   description String?

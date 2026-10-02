@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { ImageUploadError, uploadImage } from "@/lib/cloudinary";
-import { deleteProductAndImages } from "@/lib/product-cleanup";
+import { ImageUploadError, uploadImage, uploadModel } from "@/lib/cloudinary";
+import { GarmentModelError, MAX_MODEL_BYTES, MODEL_FOLDER, checkGarmentModel } from "@/lib/garment-model";
+import { deleteGarmentModel, deleteProductAndImages } from "@/lib/product-cleanup";
 import {
   ProductError,
   createProduct,
+  getProduct,
   updateProduct,
   validateProductInput,
   type ProductInput,
@@ -36,8 +38,8 @@ function field(formData: FormData, name: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-/** Reads the non-image fields. Types are loose on purpose; lib/products validates them. */
-function readFields(formData: FormData): Omit<ProductInput, "imageUrl"> {
+/** Reads the non-file fields. Types are loose on purpose; lib/products validates them. */
+function readFields(formData: FormData): Omit<ProductInput, "imageUrl" | "modelUrl"> {
   const priceText = field(formData, "price")?.trim() ?? "";
   return {
     name: field(formData, "name") ?? "",
@@ -65,8 +67,26 @@ async function uploadChosenImage(formData: FormData, required: boolean): Promise
   return url;
 }
 
+/**
+ * Reads and checks the chosen 3D model (task 67), if any, for a garment of `category`, WITHOUT uploading it:
+ * a bad model is refused before anything (image or model) reaches Cloudinary. Returns its bytes.
+ */
+async function readChosenModel(formData: FormData, category: ProductInput["category"]): Promise<Uint8Array | undefined> {
+  const file = formData.get("model");
+  if (!(file instanceof File) || file.size === 0) return undefined;
+  if (file.size > MAX_MODEL_BYTES) throw new FormError("The 3D model must be 5 MB or smaller.");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  checkGarmentModel(bytes, category); // throws a GarmentModelError saying what's wrong and how to fix it
+  return bytes;
+}
+
 function toFormState(error: unknown): ProductFormState {
-  if (error instanceof FormError || error instanceof ProductError || error instanceof ImageUploadError) {
+  if (
+    error instanceof FormError ||
+    error instanceof ProductError ||
+    error instanceof ImageUploadError ||
+    error instanceof GarmentModelError
+  ) {
     return { error: error.message };
   }
   console.error("[admin/products] Unexpected error:", error);
@@ -78,12 +98,16 @@ export async function createProductAction(
   formData: FormData,
 ): Promise<ProductFormState> {
   await requireAdmin();
+  let uploadedModel: string | undefined;
   try {
     const fields = readFields(formData);
     validateProductInput(fields, true); // check fields first, so a typo doesn't leave an orphan image in Cloudinary
+    const model = await readChosenModel(formData, fields.category); // also checked before any upload
     const imageUrl = await uploadChosenImage(formData, true);
-    await createProduct({ ...fields, imageUrl: imageUrl as string });
+    uploadedModel = model ? (await uploadModel(model, MODEL_FOLDER)).url : undefined;
+    await createProduct({ ...fields, imageUrl: imageUrl as string, ...(uploadedModel ? { modelUrl: uploadedModel } : {}) });
   } catch (error) {
+    if (uploadedModel) await deleteGarmentModel(uploadedModel); // not saved: don't leave it on Cloudinary
     return toFormState(error);
   }
   revalidatePath("/admin/products");
@@ -96,15 +120,32 @@ export async function updateProductAction(
   formData: FormData,
 ): Promise<ProductFormState> {
   await requireAdmin();
+  let uploadedModel: string | undefined;
+  let unusedModel: string | null = null; // the old model, once the product no longer points at it
   try {
     assertBoundId(id); // before any upload, so a bad id can't leave an orphan image
     const fields = readFields(formData);
     validateProductInput(fields, true); // check fields first, so a typo doesn't leave an orphan image in Cloudinary
+    const model = await readChosenModel(formData, fields.category); // also checked before any upload
+    const removeModel = !model && formData.get("removeModel") === "on"; // a newly chosen model wins
+    const current = await getProduct(id); // its current model (to replace or keep) and category
+    if (!current) throw new ProductError("NOT_FOUND", "That product doesn't exist.");
+    if (current.modelUrl && !model && !removeModel && fields.category !== current.category) {
+      throw new FormError(
+        "This garment's 3D model was checked for its old category. To change the category, also choose a new 3D model, or tick \"Remove the 3D model\".",
+      );
+    }
     const imageUrl = await uploadChosenImage(formData, false);
-    await updateProduct(id, { ...fields, ...(imageUrl ? { imageUrl } : {}) });
+    uploadedModel = model ? (await uploadModel(model, MODEL_FOLDER)).url : undefined;
+    const modelChange = uploadedModel ? { modelUrl: uploadedModel } : removeModel ? { modelUrl: null } : {};
+    await updateProduct(id, { ...fields, ...(imageUrl ? { imageUrl } : {}), ...modelChange });
+    if (current.modelUrl && "modelUrl" in modelChange) unusedModel = current.modelUrl; // replaced or removed
   } catch (error) {
+    if (uploadedModel) await deleteGarmentModel(uploadedModel); // not saved: don't leave it on Cloudinary
     return toFormState(error);
   }
+  // Only after saving: delete the old model (best-effort; deleteGarmentModel logs failures and never throws).
+  if (unusedModel) await deleteGarmentModel(unusedModel);
   revalidatePath("/admin/products");
   redirect("/admin/products");
 }

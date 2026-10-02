@@ -85,6 +85,22 @@ describe("lib/products", () => {
       expect(() => validateProductInput({ ...VALID, ...change })).toThrow(message);
     });
 
+    it("keeps a 3D model's https address, and null (no model) when it's empty or null (task 67)", () => {
+      const modelUrl = "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/m1";
+      expect(validateProductInput({ ...VALID, modelUrl: ` ${modelUrl} ` }).modelUrl).toBe(modelUrl);
+      expect(validateProductInput({ ...VALID, modelUrl: null }).modelUrl).toBeNull();
+      expect(validateProductInput({ ...VALID, modelUrl: "" }).modelUrl).toBeNull();
+      expect(validateProductInput(VALID)).not.toHaveProperty("modelUrl"); // not given: left as it is
+    });
+
+    it.each([
+      ["a non-https 3D model address", "http://res.cloudinary.com/demo/raw/upload/m1"],
+      ["a 3D model address that isn't a URL", "shirt.glb"],
+      ["a non-string 3D model address", ["https://x"] as unknown as string],
+    ])("rejects %s", (_label, modelUrl) => {
+      expect(() => validateProductInput({ ...VALID, modelUrl })).toThrow("The 3D model's address isn't valid.");
+    });
+
     it("trims the image URL", () => {
       expect(validateProductInput({ ...VALID, imageUrl: `  ${VALID.imageUrl}  ` }).imageUrl).toBe(VALID.imageUrl);
     });

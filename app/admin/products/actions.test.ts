@@ -2,12 +2,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Everything outside the action is mocked: auth, Cloudinary, the database, and Next's redirect/cache.
+// The 3D model check (lib/garment-model.ts) has its own tests; here each test says what it finds.
 const m = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   uploadImage: vi.fn(),
+  uploadModel: vi.fn(),
+  checkGarmentModel: vi.fn(),
   createProduct: vi.fn(),
+  getProduct: vi.fn(),
   updateProduct: vi.fn(),
   deleteProductAndImages: vi.fn(),
+  deleteGarmentModel: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
@@ -18,7 +23,11 @@ vi.mock("next/cache", () => ({ revalidatePath: m.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: m.redirect }));
 vi.mock("@/lib/cloudinary", async () => {
   const actual = await vi.importActual<typeof import("@/lib/cloudinary")>("@/lib/cloudinary");
-  return { ImageUploadError: actual.ImageUploadError, uploadImage: m.uploadImage };
+  return { ImageUploadError: actual.ImageUploadError, uploadImage: m.uploadImage, uploadModel: m.uploadModel };
+});
+vi.mock("@/lib/garment-model", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/garment-model")>("@/lib/garment-model");
+  return { ...actual, checkGarmentModel: m.checkGarmentModel };
 });
 vi.mock("@/lib/products", async () => {
   const actual = await vi.importActual<typeof import("@/lib/products")>("@/lib/products");
@@ -26,13 +35,18 @@ vi.mock("@/lib/products", async () => {
     ProductError: actual.ProductError,
     validateProductInput: actual.validateProductInput, // real validation, so field checks are tested
     createProduct: m.createProduct,
+    getProduct: m.getProduct,
     updateProduct: m.updateProduct,
   };
 });
 
-vi.mock("@/lib/product-cleanup", () => ({ deleteProductAndImages: m.deleteProductAndImages }));
+vi.mock("@/lib/product-cleanup", () => ({
+  deleteProductAndImages: m.deleteProductAndImages,
+  deleteGarmentModel: m.deleteGarmentModel,
+}));
 
 import { ImageUploadError } from "@/lib/cloudinary";
+import { GarmentModelError } from "@/lib/garment-model";
 import { ProductError } from "@/lib/products";
 import {
   createProductAction,
@@ -44,6 +58,10 @@ import {
 const ID = "65f0c0ffee0000000000abcd";
 const UPLOADED = "https://res.cloudinary.com/demo/image/upload/mirror-ai/garments/abc.png";
 const EMPTY = { error: null };
+const NEW_MODEL = "https://res.cloudinary.com/demo/raw/upload/v2/mirror-ai/models/new";
+const OLD_MODEL = "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/old";
+const GLB_BYTES = [0x67, 0x6c, 0x54, 0x46, 2, 0, 0, 0]; // starts like a .glb; the check itself is mocked
+const glbFile = () => new File([new Uint8Array(GLB_BYTES)], "shirt.glb", { type: "model/gltf-binary" });
 
 function form(overrides: Record<string, string | File | null> = {}): FormData {
   const values: Record<string, string | File | null> = {
@@ -67,6 +85,10 @@ describe("admin product actions", () => {
     m.uploadImage.mockResolvedValue({ url: UPLOADED, publicId: "x", width: 1, height: 1 });
     m.createProduct.mockResolvedValue({ id: ID });
     m.updateProduct.mockResolvedValue({ id: ID });
+    m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: null });
+    m.uploadModel.mockResolvedValue({ url: NEW_MODEL, publicId: "mirror-ai/models/new" });
+    m.deleteGarmentModel.mockResolvedValue(true);
+    m.checkGarmentModel.mockImplementation(() => {}); // a good model (a test may make it throw)
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
   afterEach(() => {
@@ -187,6 +209,131 @@ describe("admin product actions", () => {
       await expect(updateProductAction(ID, EMPTY, form({ image: null }))).resolves.toEqual({
         error: "That product doesn't exist.",
       });
+    });
+  });
+
+  describe("3D models (task 67)", () => {
+    it("create: checks the chosen model for the garment's category, uploads it, and saves its address", async () => {
+      await expect(createProductAction(EMPTY, form({ category: "LOWER", model: glbFile() }))).rejects.toThrow("NEXT_REDIRECT");
+      const [checked, category] = m.checkGarmentModel.mock.calls[0] as [Uint8Array, string];
+      expect([...checked]).toEqual(GLB_BYTES);
+      expect(category).toBe("LOWER");
+      expect(m.uploadModel).toHaveBeenCalledWith(expect.any(Uint8Array), "mirror-ai/models");
+      expect(m.createProduct).toHaveBeenCalledWith(expect.objectContaining({ imageUrl: UPLOADED, modelUrl: NEW_MODEL }));
+    });
+
+    it("create: no model chosen means nothing extra is uploaded or saved", async () => {
+      await expect(createProductAction(EMPTY, form({ model: new File([], "") }))).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.checkGarmentModel).not.toHaveBeenCalled();
+      expect(m.uploadModel).not.toHaveBeenCalled();
+      expect(m.createProduct).toHaveBeenCalledWith(expect.not.objectContaining({ modelUrl: expect.anything() }));
+    });
+
+    it("refuses a bad model with its message BEFORE any upload (no image or model reaches Cloudinary)", async () => {
+      m.checkGarmentModel.mockImplementation(() => {
+        throw new GarmentModelError("The 3D model has no rigged (skinned) mesh.");
+      });
+      for (const run of [() => createProductAction(EMPTY, form({ model: glbFile() })), () => updateProductAction(ID, EMPTY, form({ model: glbFile() }))]) {
+        await expect(run()).resolves.toEqual({ error: "The 3D model has no rigged (skinned) mesh." });
+      }
+      expect(m.uploadImage).not.toHaveBeenCalled();
+      expect(m.uploadModel).not.toHaveBeenCalled();
+      expect(m.createProduct).not.toHaveBeenCalled();
+      expect(m.updateProduct).not.toHaveBeenCalled();
+    });
+
+    it("refuses a model over 5 MB without checking or uploading it", async () => {
+      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.glb", { type: "model/gltf-binary" });
+      await expect(createProductAction(EMPTY, form({ model: big }))).resolves.toEqual({ error: "The 3D model must be 5 MB or smaller." });
+      expect(m.checkGarmentModel).not.toHaveBeenCalled();
+      expect(m.uploadImage).not.toHaveBeenCalled();
+    });
+
+    it("create: deletes the uploaded model again when the product can't be saved", async () => {
+      m.createProduct.mockRejectedValue(new ProductError("DB_ERROR", "Something went wrong with the products. Please try again."));
+      const state = await createProductAction(EMPTY, form({ model: glbFile() }));
+      expect(state.error).toBe("Something went wrong with the products. Please try again.");
+      expect(m.deleteGarmentModel).toHaveBeenCalledWith(NEW_MODEL);
+    });
+
+    it("shows the model upload's friendly message (and has nothing to delete)", async () => {
+      m.uploadModel.mockRejectedValue(new ImageUploadError("We couldn't upload the 3D model. Please try again."));
+      await expect(createProductAction(EMPTY, form({ model: glbFile() }))).resolves.toEqual({
+        error: "We couldn't upload the 3D model. Please try again.",
+      });
+      expect(m.deleteGarmentModel).not.toHaveBeenCalled();
+    });
+
+    it("edit: replaces the model (uploads and saves the new one, THEN deletes the old file)", async () => {
+      m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: OLD_MODEL });
+      await expect(updateProductAction(ID, EMPTY, form({ image: null, model: glbFile() }))).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.updateProduct).toHaveBeenCalledWith(ID, expect.objectContaining({ modelUrl: NEW_MODEL }));
+      expect(m.deleteGarmentModel).toHaveBeenCalledWith(OLD_MODEL);
+      expect(m.deleteGarmentModel).not.toHaveBeenCalledWith(NEW_MODEL);
+      expect(m.updateProduct.mock.invocationCallOrder[0]).toBeLessThan(m.deleteGarmentModel.mock.invocationCallOrder[0]);
+    });
+
+    it('edit: "Remove the 3D model" saves no model and deletes the old file, uploading nothing', async () => {
+      m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: OLD_MODEL });
+      await expect(updateProductAction(ID, EMPTY, form({ image: null, removeModel: "on" }))).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.updateProduct).toHaveBeenCalledWith(ID, expect.objectContaining({ modelUrl: null }));
+      expect(m.uploadModel).not.toHaveBeenCalled();
+      expect(m.deleteGarmentModel).toHaveBeenCalledWith(OLD_MODEL);
+    });
+
+    it("edit: a newly chosen model wins over a ticked Remove", async () => {
+      await expect(updateProductAction(ID, EMPTY, form({ model: glbFile(), removeModel: "on" }))).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.updateProduct).toHaveBeenCalledWith(ID, expect.objectContaining({ modelUrl: NEW_MODEL }));
+    });
+
+    it("edit: keeps the current model when it isn't changed", async () => {
+      m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: OLD_MODEL });
+      await expect(updateProductAction(ID, EMPTY, form({ image: null }))).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.updateProduct).toHaveBeenCalledWith(ID, expect.not.objectContaining({ modelUrl: expect.anything() }));
+      expect(m.deleteGarmentModel).not.toHaveBeenCalled();
+    });
+
+    it("edit: refuses a category change that would keep a model checked for the old category, before any upload", async () => {
+      m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: OLD_MODEL });
+      const state = await updateProductAction(ID, EMPTY, form({ category: "LOWER" }));
+      expect(state.error).toContain("checked for its old category");
+      expect(m.uploadImage).not.toHaveBeenCalled();
+      expect(m.updateProduct).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["with a new model", { model: glbFile() }],
+      ["while removing the model", { removeModel: "on" }],
+    ])("edit: allows that category change %s", async (_case, extra) => {
+      m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: OLD_MODEL });
+      await expect(updateProductAction(ID, EMPTY, form({ image: null, category: "LOWER", ...extra }))).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.updateProduct).toHaveBeenCalledWith(ID, expect.objectContaining({ category: "LOWER" }));
+    });
+
+    it("edit: says the product doesn't exist (before any upload) when it was deleted meanwhile", async () => {
+      m.getProduct.mockResolvedValue(null);
+      await expect(updateProductAction(ID, EMPTY, form({ model: glbFile() }))).resolves.toEqual({ error: "That product doesn't exist." });
+      expect(m.uploadImage).not.toHaveBeenCalled();
+      expect(m.uploadModel).not.toHaveBeenCalled();
+    });
+
+    it("edit: shows a friendly message (before any upload) when the product can't be loaded", async () => {
+      m.getProduct.mockRejectedValue(new ProductError("DB_ERROR", "Something went wrong with the products. Please try again."));
+      await expect(updateProductAction(ID, EMPTY, form({ model: glbFile() }))).resolves.toEqual({
+        error: "Something went wrong with the products. Please try again.",
+      });
+      expect(m.uploadImage).not.toHaveBeenCalled();
+      expect(m.uploadModel).not.toHaveBeenCalled();
+    });
+
+    it("edit: if saving fails, deletes the NEW model and keeps the old one", async () => {
+      m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: OLD_MODEL });
+      m.updateProduct.mockRejectedValue(new ProductError("NOT_FOUND", "That product doesn't exist."));
+      await expect(updateProductAction(ID, EMPTY, form({ image: null, model: glbFile() }))).resolves.toEqual({
+        error: "That product doesn't exist.",
+      });
+      expect(m.deleteGarmentModel).toHaveBeenCalledWith(NEW_MODEL);
+      expect(m.deleteGarmentModel).not.toHaveBeenCalledWith(OLD_MODEL);
     });
   });
 
