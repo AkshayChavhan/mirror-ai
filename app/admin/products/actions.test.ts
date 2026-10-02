@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
   uploadImage: vi.fn(),
+  deleteImage: vi.fn(),
   uploadModel: vi.fn(),
   checkGarmentModel: vi.fn(),
   createProduct: vi.fn(),
@@ -23,7 +24,12 @@ vi.mock("next/cache", () => ({ revalidatePath: m.revalidatePath }));
 vi.mock("next/navigation", () => ({ redirect: m.redirect }));
 vi.mock("@/lib/cloudinary", async () => {
   const actual = await vi.importActual<typeof import("@/lib/cloudinary")>("@/lib/cloudinary");
-  return { ImageUploadError: actual.ImageUploadError, uploadImage: m.uploadImage, uploadModel: m.uploadModel };
+  return {
+    ImageUploadError: actual.ImageUploadError,
+    uploadImage: m.uploadImage,
+    deleteImage: m.deleteImage,
+    uploadModel: m.uploadModel,
+  };
 });
 vi.mock("@/lib/garment-model", async () => {
   const actual = await vi.importActual<typeof import("@/lib/garment-model")>("@/lib/garment-model");
@@ -82,7 +88,8 @@ function form(overrides: Record<string, string | File | null> = {}): FormData {
 describe("admin product actions", () => {
   beforeEach(() => {
     m.requireAdmin.mockResolvedValue("user_admin");
-    m.uploadImage.mockResolvedValue({ url: UPLOADED, publicId: "x", width: 1, height: 1 });
+    m.uploadImage.mockResolvedValue({ url: UPLOADED, publicId: "mirror-ai/garments/abc", width: 800, height: 1200 });
+    m.deleteImage.mockResolvedValue(true);
     m.createProduct.mockResolvedValue({ id: ID });
     m.updateProduct.mockResolvedValue({ id: ID });
     m.getProduct.mockResolvedValue({ id: ID, category: "UPPER", modelUrl: null });
@@ -209,6 +216,60 @@ describe("admin product actions", () => {
       await expect(updateProductAction(ID, EMPTY, form({ image: null }))).resolves.toEqual({
         error: "That product doesn't exist.",
       });
+    });
+  });
+
+  describe("minimum garment image size (task 68)", () => {
+    const uploadedSize = (width: number, height: number) =>
+      m.uploadImage.mockResolvedValue({ url: UPLOADED, publicId: "mirror-ai/garments/abc", width, height });
+
+    it.each([
+      ["too narrow", 511, 800],
+      ["too short", 800, 511],
+      ["tiny (the 161×148 that gave a poor try-on)", 161, 148],
+    ])("refuses an image that's %s, saying its size, and deletes the upload", async (_case, width, height) => {
+      uploadedSize(width, height);
+      const state = await createProductAction(EMPTY, form());
+      expect(state.error).toBe(
+        `The garment image must be at least 512 × 512 pixels (this one is ${width} × ${height}). Small images give poor try-ons.`,
+      );
+      expect(m.deleteImage).toHaveBeenCalledWith("mirror-ai/garments/abc");
+      expect(m.createProduct).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["exactly 512 × 512", 512, 512],
+      ["just over", 513, 2000],
+    ])("accepts an image %s", async (_case, width, height) => {
+      uploadedSize(width, height);
+      await expect(createProductAction(EMPTY, form())).rejects.toThrow("NEXT_REDIRECT");
+      expect(m.deleteImage).not.toHaveBeenCalled();
+      expect(m.createProduct).toHaveBeenCalledWith(expect.objectContaining({ imageUrl: UPLOADED }));
+    });
+
+    it("refuses a too-small replacement image on edit, keeping the product as it was", async () => {
+      uploadedSize(300, 300);
+      const state = await updateProductAction(ID, EMPTY, form());
+      expect(state.error).toContain("at least 512 × 512 pixels (this one is 300 × 300)");
+      expect(m.deleteImage).toHaveBeenCalledWith("mirror-ai/garments/abc");
+      expect(m.updateProduct).not.toHaveBeenCalled();
+    });
+
+    it("refuses it before the 3D model is uploaded (no orphan model either), on create and edit", async () => {
+      uploadedSize(100, 100);
+      const glb = () => new File([new Uint8Array([0x67, 0x6c, 0x54, 0x46])], "shirt.glb", { type: "model/gltf-binary" });
+      for (const run of [() => createProductAction(EMPTY, form({ model: glb() })), () => updateProductAction(ID, EMPTY, form({ model: glb() }))]) {
+        expect((await run()).error).toContain("at least 512 × 512 pixels (this one is 100 × 100)");
+      }
+      expect(m.uploadModel).not.toHaveBeenCalled();
+    });
+
+    it("still gives the size message when deleting the refused upload fails (deleteImage logs it)", async () => {
+      uploadedSize(200, 900);
+      m.deleteImage.mockResolvedValue(false);
+      const state = await createProductAction(EMPTY, form());
+      expect(state.error).toContain("at least 512 × 512 pixels (this one is 200 × 900)");
+      expect(m.createProduct).not.toHaveBeenCalled();
     });
   });
 

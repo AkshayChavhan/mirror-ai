@@ -18,6 +18,7 @@ describe("ProductForm", () => {
     render(<ProductForm action={vi.fn()} />);
     expect(screen.getByLabelText("Name")).toHaveValue("");
     expect(screen.getByLabelText("Garment image")).toBeRequired();
+    expect(screen.getByLabelText("Garment image")).toHaveAccessibleDescription(/at least 512 × 512 pixels, up to 5 MB/); // task 68
     expect(screen.getByLabelText("Visible to shoppers")).toBeChecked();
     expect(screen.getByRole("button", { name: "Create product" })).toBeInTheDocument();
   });
