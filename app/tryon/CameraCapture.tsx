@@ -16,6 +16,17 @@ const JPEG_QUALITY = 0.9;
 /** The preview's shape (width / height), as in its `aspect-[3/4]` class. */
 const VIEW_ASPECT = 3 / 4;
 const CAPTURE_FAILED = "We couldn't take the photo. Try again, or choose a photo instead.";
+/** The camera stopped by itself mid-session (task 69): unplugged, or access turned off in the browser. */
+export const CAMERA_STOPPED =
+  "Your camera stopped (was it unplugged, or was access turned off?). Cancel and try again, or choose a photo instead.";
+
+/**
+ * Calls `onStopped` once if a track of `stream` ends by itself (unplugged, access revoked, the device sleeps).
+ * Its picture would freeze on the last frame. Browsers don't fire "ended" for our own track.stop() calls.
+ */
+export function whenCameraStops(stream: MediaStream, onStopped: () => void): void {
+  for (const track of stream.getTracks()) track.addEventListener("ended", onStopped, { once: true });
+}
 
 /** What to tell the user when the camera can't start, from the error's name (getUserMedia's DOMExceptions). */
 export function cameraErrorMessage(error: unknown): string {
@@ -77,6 +88,12 @@ export default function CameraCapture({ onCapture, onCancel }: Props) {
       }
       if (closed) return stopCamera(stream); // closed while the browser was asking for permission
       streamRef.current = stream;
+      whenCameraStops(stream, () => {
+        if (closed) return;
+        stopCamera(stream);
+        streamRef.current = null; // a photo being made right now is dropped: it could be the frozen frame
+        setStartError(CAMERA_STOPPED); // the camera isn't on any more: Take photo is disabled
+      });
       try {
         const video = videoRef.current;
         if (!video) throw new Error("The camera view is gone.");
@@ -87,7 +104,8 @@ export default function CameraCapture({ onCapture, onCancel }: Props) {
         // Permission was granted, but the picture can't be shown: don't leave the camera running.
         stopCamera(stream);
         streamRef.current = null;
-        if (!closed) setStartError("We couldn't show your camera. Cancel and try again, or choose a photo instead.");
+        // Keep an earlier message: if the camera stopped by itself first, that's the real problem (task 69).
+        if (!closed) setStartError((earlier) => earlier ?? "We couldn't show your camera. Cancel and try again, or choose a photo instead.");
       }
     })();
     return () => {

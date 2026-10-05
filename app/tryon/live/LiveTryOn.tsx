@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { cameraErrorMessage, coverCrop } from "../CameraCapture";
+import { CAMERA_STOPPED, cameraErrorMessage, coverCrop, whenCameraStops } from "../CameraCapture";
 import { smoothPose, toBodyPose, type BodyPose } from "./bodyPose";
 import { loadGarmentLook } from "./garmentLook";
 import { toGarmentPose } from "./garmentPose";
@@ -41,6 +41,7 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
 
   useEffect(() => {
     let closed = false;
+    let failed = false; // the first failure's message stays (e.g. the camera stopping while MediaPipe loads)
     let frame = 0;
     let tracker: PoseTracker | null = null;
     let garment: Garment | null = null;
@@ -54,7 +55,8 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
       streamRef.current = null;
     };
     const fail = (message: string) => {
-      if (closed) return;
+      if (closed || failed) return;
+      failed = true;
       stopCamera();
       tracker?.close(); // nothing will use it now
       tracker = null;
@@ -75,6 +77,7 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
       }
       if (closed) return stream.getTracks().forEach((track) => track.stop());
       streamRef.current = stream;
+      whenCameraStops(stream, () => fail(CAMERA_STOPPED)); // task 69: stops the tracker and disables Take photo
 
       // 2. The tracker, the garment's look and the 3D scene. Any failure: Live 3D isn't available here.
       try {
@@ -84,7 +87,8 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
         video.srcObject = stream;
         await video.play();
         const [loadedTracker, look] = await Promise.all([createPoseTracker(), loadGarmentLook(product.imageUrl)]);
-        if (closed) return loadedTracker.close(); // closed while loading: the cleanup already ran without it
+        // Closed or failed while loading (e.g. the camera stopped): nothing will use the tracker.
+        if (closed || failed) return loadedTracker.close();
         tracker = loadedTracker;
         if (look.print) {
           texture = new THREE.CanvasTexture(look.print);
