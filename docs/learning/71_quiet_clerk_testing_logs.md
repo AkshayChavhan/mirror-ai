@@ -44,7 +44,7 @@ npx playwright test e2e/signed-in.spec.ts e2e/tryon-live.spec.ts e2e/admin-model
 ```
 **Why:** runs every signed-in test 5 times, saving the output to a file and printing only counts (so no token can reach the terminal).
 
-- A temporary spec, `e2e/zz-clerk-repro.spec.ts`, signed in and ended the test with Clerk requests in flight. Its final version:
+- A temporary spec, `e2e/zz-clerk-repro.spec.ts`, signed in and ended the test with Clerk requests in flight. An **excerpt** of its final version (the file also had the `clerk`, `test` and `E2E_USERS` imports, and `type WithClerk = Window & { Clerk: { session: { touch(): Promise<unknown> } | null } };`):
 
 ```ts
 test("ends with a Clerk request still in flight", async ({ page }) => {
@@ -146,7 +146,7 @@ mutate() { cp "$1" <scratch>/mutant.bak && sed -i '' "$2" "$1" && npx vitest run
 ```bash
 mutate scripts/e2e-clerk.ts 's/  return text.replace(CLERK_TOKEN, "$1<redacted>");/  return text;/' scripts/e2e-clerk.test.ts
 ```
-**Why:** mutation 1, no redaction: 5 tests fail.
+**Why:** mutation 1, no redaction: 5 tests failed when first run. Rerun after the testing-token test was added, **6 of 22 fail**.
 
 ```bash
 mutate scripts/e2e-clerk.ts '/  if (arg instanceof Error) {/,/^  }$/d' scripts/e2e-clerk.test.ts
@@ -188,6 +188,13 @@ bash .claude/hooks/block-dangerous-git.test.sh
 ```
 **Why:** the git-safety hook's tests: `Failures: 0`.
 
+```bash
+gh run view 37276461142 --log > <scratch>/ci-71.log; grep -cE '__clerk_(db_jwt|testing_token)=' <scratch>/ci-71.log; grep -E '__clerk_(db_jwt|testing_token)=' <scratch>/ci-71.log | grep -cv '=<redacted>'; grep -c 'FAPI request failed' <scratch>/ci-71.log
+```
+**Why:** the row's CI check, on PR #71's first CI run (`37276461142`, which passed with `42 passed` E2E and `795 passed` unit tests).
+- Result: **0** token lines, **0** unredacted, **0** Clerk warnings.
+- No warning happened in this run, so it shows no leak, not the redaction at work. The redaction itself is proven by the real-worker test above.
+
 ## 6. Commit, publish, PR, auto-merge
 
 ```bash
@@ -204,6 +211,12 @@ git commit -m "71_quiet_clerk_testing_logs Redact Clerk session tokens in E2E ou
 git push -u origin 71_quiet_clerk_testing_logs
 ```
 **Why:** publishes the branch.
+- It failed with `could not read Password … Device not configured`: the GitHub CLI's **active account** had been switched to another of the developer's accounts. `gh auth status` showed both accounts, with the repo owner's not active.
+
+```bash
+git -c credential.helper= -c credential.helper='!f() { test "$1" = get || exit 0; echo username=<repo-owner>; echo "password=$(gh auth token --user <repo-owner>)"; }; f' push -u origin 71_quiet_clerk_testing_logs
+```
+**Why:** pushes with the repo owner's stored login, **without switching the active account**. The token goes straight to git and is never printed. `gh pr create` and `gh pr merge` then ran with `GH_TOKEN="$(gh auth token --user <repo-owner>)"` for the same reason.
 
 ```bash
 gh pr create --base main --head 71_quiet_clerk_testing_logs --title "71_quiet_clerk_testing_logs Redact Clerk session tokens in E2E output" --body-file <file>
@@ -222,4 +235,4 @@ gh pr merge <number> --auto --merge
 - **Third-party test tools can log secrets.** Check what they print before trusting a public CI log.
 - **A console patch lasts for the whole worker process.** Run a with/without comparison as separate runs, or the control gets patched too.
 - **A new signed-in spec must call `redactClerkTokensInConsole()` too.** The guard test fails if it doesn't.
-- **The CI half of the row** ("CI log has no `__clerk_db_jwt` values") can only be confirmed on this PR's own CI run. Check it with `gh run view <id> --log | grep '__clerk_db_jwt=' | grep -cv '<redacted>'`.
+- **The CI half of the row** ("CI log has no `__clerk_db_jwt` values") can only be confirmed on the PR's own CI run (below).
