@@ -1,7 +1,7 @@
 // @vitest-environment node
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { fitGarmentModel, loadGarmentModel } from "./garmentModel";
+import { EASE, TORSO_STRETCH, fitGarmentModel, loadGarmentModel } from "./garmentModel";
 import type { BoneTarget, GarmentPose } from "./garmentPose";
 import type { BoneName } from "./skeleton";
 
@@ -32,6 +32,7 @@ const T_POSE: Spec[] = [
 ];
 const REST_SHOULDERS = 0.36; // LeftArm to RightArm
 const REST_HIPS = 0.2; // LeftUpLeg to RightUpLeg
+const REST_TORSO = 0.55; // between the thighs (y 0.95) to between the shoulders (y 1.5)
 
 type Built = { scene: THREE.Group; bones: Map<string, THREE.Bone>; mesh: THREE.SkinnedMesh; texture: THREE.Texture };
 
@@ -117,11 +118,11 @@ describe("fitGarmentModel", () => {
     expect(built.mesh.frustumCulled).toBe(false);
   });
 
-  it("puts the model's hips on the person's hips (screen y flipped) and sizes it by shoulder width", () => {
+  it("puts the model's hips on the person's hips (screen y flipped) and sizes it by shoulder width, plus ease", () => {
     const built = model();
     const garment = fitGarmentModel(built.scene, "UPPER");
     garment.pose(pose());
-    expect(garment.object.scale.x).toBeCloseTo(200 / REST_SHOULDERS);
+    expect(garment.object.scale.x).toBeCloseTo((200 / REST_SHOULDERS) * EASE);
     const hips = at(built, "LeftUpLeg").add(at(built, "RightUpLeg")).multiplyScalar(0.5);
     expectClose(hips, new THREE.Vector3(500, -600, 0), 1);
   });
@@ -195,7 +196,7 @@ describe("fitGarmentModel", () => {
       const built = model(options);
       const garment = fitGarmentModel(built.scene, "UPPER");
       garment.pose(pose({ bones: { LeftArm: { angle: -1.2 }, LeftForeArm: { angle: 0.3 } } }));
-      expect(garment.object.scale.x).toBeCloseTo(200 / REST_SHOULDERS); // the armature's unit cancels out: same real size
+      expect(garment.object.scale.x).toBeCloseTo((200 / REST_SHOULDERS) * EASE); // the armature's unit cancels out: same real size
       expectClose(pointing(built, "LeftArm", "LeftForeArm"), direction(-1.2));
       expectClose(pointing(built, "LeftForeArm", "LeftHand"), direction(0.3));
     }
@@ -205,8 +206,59 @@ describe("fitGarmentModel", () => {
     const built = model({ without: ["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"] });
     const garment = fitGarmentModel(built.scene, "LOWER");
     garment.pose(pose()); // the person's thighs start 100 px apart
-    expect(garment.object.scale.x).toBeCloseTo(100 / REST_HIPS);
+    expect(garment.object.scale.x).toBeCloseTo((100 / REST_HIPS) * EASE);
+    expect(garment.object.scale.y).toBeCloseTo(garment.object.scale.x); // no torso to match: its own proportions
     expectClose(pointing(built, "LeftUpLeg", "LeftLeg"), direction(Math.PI));
+  });
+
+  describe("fitting the body (task 73)", () => {
+    it("is wider (and deeper) than the person's joints by the ease, so it covers their own clothes", () => {
+      const built = model();
+      const garment = fitGarmentModel(built.scene, "UPPER");
+      garment.pose(pose());
+      expect(EASE).toBeGreaterThan(1);
+      expect(at(built, "LeftArm").distanceTo(at(built, "RightArm"))).toBeCloseTo(200 * EASE, 1); // the person: 200 px
+      expect(garment.object.scale.z).toBeCloseTo(garment.object.scale.x);
+    });
+
+    it("matches the person's torso length (hips to shoulders) when their hips are in view", () => {
+      const built = model();
+      const garment = fitGarmentModel(built.scene, "UPPER");
+      garment.pose(pose({ bones: { Spine: { length: 300 } } }));
+      expect(garment.object.scale.y).toBeCloseTo(300 / REST_TORSO);
+      const hips = at(built, "LeftUpLeg").add(at(built, "RightUpLeg")).multiplyScalar(0.5);
+      const shoulders = at(built, "LeftArm").add(at(built, "RightArm")).multiplyScalar(0.5);
+      expect(shoulders.distanceTo(hips)).toBeCloseTo(300, 0);
+    });
+
+    it("keeps the garment's own proportions when the hips are only estimated (close up, seated)", () => {
+      const built = model();
+      const garment = fitGarmentModel(built.scene, "UPPER");
+      garment.pose(pose({ legsInView: false, bones: { Spine: { length: 300 } } }));
+      expect(garment.object.scale.y).toBeCloseTo(garment.object.scale.x);
+    });
+
+    it("limits the stretch, so noisy tracking can't make it absurdly long or short", () => {
+      const built = model();
+      const garment = fitGarmentModel(built.scene, "UPPER");
+      garment.pose(pose({ bones: { Spine: { length: 5000 } } }));
+      expect(garment.object.scale.y / garment.object.scale.x).toBeCloseTo(TORSO_STRETCH.max);
+      garment.pose(pose({ bones: { Spine: { length: 20 } } }));
+      expect(garment.object.scale.y / garment.object.scale.x).toBeCloseTo(TORSO_STRETCH.min);
+    });
+
+    it("still points the arms exactly while stretched unevenly", () => {
+      const built = model({ twist: true });
+      const garment = fitGarmentModel(built.scene, "UPPER");
+      garment.pose(pose({ bones: { Spine: { length: 420, angle: 0.25 }, LeftArm: { angle: -1.1 }, LeftForeArm: { angle: 0.6 } }, turn: 0.3 }));
+      expect(garment.object.scale.y).not.toBeCloseTo(garment.object.scale.x, 0); // really uneven
+      expectClose(pointing(built, "LeftArm", "LeftForeArm"), direction(-1.1));
+      expectClose(pointing(built, "LeftForeArm", "LeftHand"), direction(0.6));
+      const shoulders = at(built, "LeftArm").add(at(built, "RightArm")).multiplyScalar(0.5);
+      const spine = shoulders.sub(at(built, "Spine")).normalize();
+      expect(spine.x).toBeCloseTo(direction(0.25).x, 2);
+      expect(spine.y).toBeCloseTo(direction(0.25).y, 2);
+    });
   });
 
   it("refuses a model with no rigged mesh, or without the bones its kind needs", () => {

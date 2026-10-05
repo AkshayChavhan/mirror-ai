@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { describe, expect, it } from "vitest";
-import { fitGarmentModel } from "@/app/tryon/live/garmentModel";
+import { EASE, fitGarmentModel } from "@/app/tryon/live/garmentModel";
 import type { BoneTarget, GarmentPose } from "@/app/tryon/live/garmentPose";
 import type { BoneName } from "@/app/tryon/live/skeleton";
 import { checkGarmentModel } from "@/lib/garment-model";
@@ -45,6 +45,6 @@ describe("riggedGarmentGlb (test fixture)", () => {
     const arm = at("LeftForeArm").sub(at("LeftArm")).normalize();
     expect(arm.x).toBeCloseTo(-Math.sin(-1.2), 3);
     expect(arm.y).toBeCloseTo(Math.cos(-1.2), 3);
-    expect(garment.object.scale.x).toBeCloseTo(200 / 0.36); // sized by its 0.36 m shoulders
+    expect(garment.object.scale.x).toBeCloseTo((200 / 0.36) * EASE); // sized by its 0.36 m shoulders, plus ease (task 73)
   });
 });
