@@ -1,7 +1,10 @@
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_USERS } from "../scripts/e2e-clerk";
+import { E2E_USERS, redactClerkTokensInConsole } from "../scripts/e2e-clerk";
 import { E2E_DATA } from "../scripts/e2e-db";
+
+// The CI log is public: hide Clerk's short-lived session tokens in anything this worker prints (task 71).
+redactClerkTokensInConsole();
 
 // Signed-in pages, with the two Clerk test users (task 58). The global setup gets a Clerk testing token
 // when the Clerk keys are available (CI secrets, or .env locally); without it these tests skip.

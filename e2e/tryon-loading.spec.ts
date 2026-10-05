@@ -1,7 +1,10 @@
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_USERS } from "../scripts/e2e-clerk";
+import { E2E_USERS, redactClerkTokensInConsole } from "../scripts/e2e-clerk";
 import { E2E_DATA } from "../scripts/e2e-db";
+
+// The CI log is public: hide Clerk's short-lived session tokens in anything this worker prints (task 71).
+redactClerkTokensInConsole();
 
 // The /tryon loading screen (task 43). A real try-on can't be started here (no Cloudinary keys in CI), so the
 // page opens an already-started one from the address (?tryon=<id>) and the status endpoint's replies are faked

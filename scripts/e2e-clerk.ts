@@ -37,3 +37,44 @@ export function assertTestClerkKey(secretKey: string): void {
     throw new Error("Refusing to run signed-in E2E tests: CLERK_SECRET_KEY isn't a development (sk_test_) key.");
   }
 }
+
+// Task 71: @clerk/testing prints the URL of a Frontend API request that failed, for example one still in flight
+// when a test ends ("route.fetch: Test ended"). Those URLs carry `__clerk_db_jwt`, a short-lived session token
+// for the development instance, and the CI log is public. Its retried request also carries the testing token
+// (`__clerk_testing_token`), which a Playwright network error can print with the request. The timing can't be
+// reproduced on demand, so instead of trying to prevent every warning, signed-in specs redact both tokens in
+// anything the test worker prints.
+
+const CLERK_TOKEN = /((?:__clerk_db_jwt|__clerk_testing_token)=)[^&;,\s"'()<>]+/g;
+
+/** `text` with every `__clerk_db_jwt` and `__clerk_testing_token` value replaced by "<redacted>". */
+export function redactClerkTokens(text: string): string {
+  return text.replace(CLERK_TOKEN, "$1<redacted>");
+}
+
+function redactArgument(arg: unknown): unknown {
+  if (typeof arg === "string") return redactClerkTokens(arg);
+  if (arg instanceof Error) {
+    const copy = new Error(redactClerkTokens(arg.message));
+    copy.stack = arg.stack === undefined ? undefined : redactClerkTokens(arg.stack);
+    return copy;
+  }
+  return arg;
+}
+
+type ConsoleLike = Pick<Console, "log" | "info" | "warn" | "error" | "debug">;
+const LEVELS = ["log", "info", "warn", "error", "debug"] as const;
+const redacted = new WeakSet<object>();
+
+/**
+ * Makes `target` (the test worker's console) redact Clerk tokens in strings and errors before printing them.
+ * Call it at the top of every signed-in spec; calling it again for the same console does nothing.
+ */
+export function redactClerkTokensInConsole(target: ConsoleLike = console): void {
+  if (redacted.has(target)) return;
+  redacted.add(target);
+  for (const level of LEVELS) {
+    const print = target[level].bind(target);
+    target[level] = (...args: unknown[]) => print(...args.map(redactArgument));
+  }
+}
