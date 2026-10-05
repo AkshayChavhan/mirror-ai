@@ -1,6 +1,8 @@
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { E2E_USERS, redactClerkTokensInConsole } from "../scripts/e2e-clerk";
+import { E2E_DATA } from "../scripts/e2e-db";
+import { riggedGarmentGlb } from "../scripts/rigged-glb";
 
 // The CI log is public: hide Clerk's short-lived session tokens in anything this worker prints (task 71).
 redactClerkTokensInConsole();
@@ -18,7 +20,7 @@ test.use({
 
 type WithCspLog = Window & { __cspBlocked?: string[] };
 
-/** Our app and Clerk only: 'self', the Clerk instance's Frontend API, then Clerk's telemetry. */
+/** Starts with our app and Clerk: 'self', the Clerk instance's Frontend API, then Clerk's telemetry (then blob: and our models). */
 const OUR_POLICY = /^connect-src 'self' https:\/\/[a-z0-9-]+\.clerk\.accounts\.dev https:\/\/clerk-telemetry\.com/;
 
 test.describe("Live 3D try-on", () => {
@@ -36,7 +38,7 @@ test.describe("Live 3D try-on", () => {
     return home;
   }
 
-  test("every page only lets the browser talk to our app and Clerk (no Google)", async ({ page }) => {
+  test("every page only lets the browser talk to our app, Clerk and our own 3D models (no Google)", async ({ page }) => {
     const home = await signInAtHome(page);
     const studio = await page.goto("/tryon");
     for (const response of [home, studio]) {
@@ -73,5 +75,32 @@ test.describe("Live 3D try-on", () => {
     await expect
       .poll(() => page.evaluate(() => (window as WithCspLog).__cspBlocked ?? []), { timeout: 15_000 })
       .toContainEqual(expect.stringContaining("odml.pa.googleapis.com"));
+  });
+
+  test("uses the garment's uploaded 3D model, with its texture, when it has one (task 72)", async ({ page }) => {
+    test.skip(!process.env.E2E_DATABASE_URL, "needs the seeded test database (CI)");
+    test.slow();
+    // The seeded 3D shirt's model URL (Cloudinary's demo account) gets a generated rigged model with an embedded
+    // texture, served here instead of from the internet. CORS header as Cloudinary sends it.
+    let served = 0;
+    await page.route(E2E_DATA.modelUrl, async (route) => {
+      served += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "model/gltf-binary",
+        headers: { "access-control-allow-origin": "*" },
+        body: Buffer.from(riggedGarmentGlb({ texture: true })),
+      });
+    });
+    await signInAtHome(page);
+    await page.goto(`/tryon?product=${E2E_DATA.products.model3d.id}`);
+    await page.getByRole("button", { name: "Live 3D" }).click();
+
+    await expect(page.locator('canvas[data-garment="model"]')).toBeAttached({ timeout: 30_000 }); // not the template
+    await expect(page.getByText("Step back until we can see your shoulders.")).toBeVisible();
+    expect(served).toBe(1);
+    // The model's download and its texture (a blob: URL inside the browser) were allowed by the security policy.
+    const blocked = await page.evaluate(() => (window as WithCspLog).__cspBlocked ?? []);
+    expect(blocked.filter((uri) => !uri.includes("googleapis"))).toEqual([]);
   });
 });

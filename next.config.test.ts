@@ -49,7 +49,7 @@ describe("next.config.ts headers (task 66)", () => {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: "connect-src 'self' https://example-instance-1.clerk.accounts.dev https://clerk-telemetry.com",
+            value: "connect-src 'self' https://example-instance-1.clerk.accounts.dev https://clerk-telemetry.com blob:",
           },
         ],
       },
@@ -75,5 +75,17 @@ describe("next.config.ts server action body size (task 67)", () => {
     vi.resetModules();
     const config = (await import("./next.config")).default;
     expect(config.experimental?.proxyClientMaxBodySize).toBe("11mb");
+  });
+});
+
+describe("next.config.ts headers: garment models (task 72)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("lets pages download 3D models from our own Cloudinary account (CLOUDINARY_CLOUD_NAME)", async () => {
+    vi.stubEnv("CLOUDINARY_CLOUD_NAME", "my-cloud");
+    vi.resetModules();
+    const config = (await import("./next.config")).default;
+    const [rule] = (await config.headers?.()) ?? [];
+    expect(rule.headers[0].value).toContain(" https://res.cloudinary.com/my-cloud/raw/upload/");
   });
 });

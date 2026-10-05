@@ -27,10 +27,12 @@ vi.mock("./TryOnStudio", () => ({
 
 import TryOnPage from "./page";
 
-const product = (id: string, name: string) => ({
+const MODEL_URL = "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/dress";
+const product = (id: string, name: string, modelUrl: string | null = null) => ({
   id,
   name,
   imageUrl: `https://res.cloudinary.com/demo/image/upload/${name}.png`,
+  modelUrl,
   category: "UPPER",
   price: 29.99,
   description: "secret admin notes",
@@ -40,7 +42,7 @@ const product = (id: string, name: string) => ({
   updatedAt: new Date(),
 });
 const A = product("65f0c0ffee0000000000aaa1", "shirt");
-const B = product("65f0c0ffee0000000000aaa2", "dress");
+const B = product("65f0c0ffee0000000000aaa2", "dress", MODEL_URL);
 
 async function renderPage(search: Record<string, string | string[] | undefined> = {}) {
   render(await TryOnPage({ searchParams: Promise.resolve(search) }));
@@ -59,13 +61,13 @@ describe("/tryon", () => {
     expect(m.listActiveProducts).not.toHaveBeenCalled();
   });
 
-  it("passes only each garment's id, name, image and category (for Live 3D) to the browser", async () => {
+  it("passes only each garment's id, name, image, category and 3D model (for Live 3D) to the browser", async () => {
     await renderPage();
     expect(screen.getByRole("heading", { level: 1, name: "Try it on" })).toBeInTheDocument();
     const products = JSON.parse(screen.getByTestId("studio").getAttribute("data-products") ?? "[]");
     expect(products).toEqual([
-      { id: A.id, name: "shirt", imageUrl: A.imageUrl, category: "UPPER" },
-      { id: B.id, name: "dress", imageUrl: B.imageUrl, category: "UPPER" },
+      { id: A.id, name: "shirt", imageUrl: A.imageUrl, category: "UPPER", modelUrl: null },
+      { id: B.id, name: "dress", imageUrl: B.imageUrl, category: "UPPER", modelUrl: MODEL_URL },
     ]);
   });
 

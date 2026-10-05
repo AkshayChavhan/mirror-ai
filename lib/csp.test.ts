@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { clerkFrontendApiOrigin, contentSecurityPolicy } from "./csp";
+import { clerkFrontendApiOrigin, cloudinaryModelSource, contentSecurityPolicy } from "./csp";
 
 // A fake publishable key in Clerk's format: pk_test_ + base64("<host>$"). Not a real instance.
 const key = (host: string, kind = "test") => `pk_${kind}_${Buffer.from(`${host}$`).toString("base64")}`;
@@ -23,9 +23,9 @@ describe("clerkFrontendApiOrigin", () => {
 });
 
 describe("contentSecurityPolicy", () => {
-  it("only lets the page talk to our own app and Clerk: MediaPipe's metrics to Google are blocked", () => {
+  it("only lets the page talk to our own app, Clerk and in-page blob: data: MediaPipe's metrics to Google are blocked", () => {
     const policy = contentSecurityPolicy(DEV_KEY, false);
-    expect(policy).toBe("connect-src 'self' https://example-instance-1.clerk.accounts.dev https://clerk-telemetry.com");
+    expect(policy).toBe("connect-src 'self' https://example-instance-1.clerk.accounts.dev https://clerk-telemetry.com blob:");
     expect(policy).not.toMatch(/googleapis|\*/);
   });
 
@@ -38,7 +38,30 @@ describe("contentSecurityPolicy", () => {
     expect(contentSecurityPolicy(DEV_KEY, false)).not.toContain("ws:");
   });
 
+  it("lets Live 3D download garment models from our own Cloudinary account's raw files only (task 72)", () => {
+    const policy = contentSecurityPolicy(DEV_KEY, false, "my-cloud_1");
+    expect(policy).toBe(
+      "connect-src 'self' https://example-instance-1.clerk.accounts.dev https://clerk-telemetry.com blob: https://res.cloudinary.com/my-cloud_1/raw/upload/",
+    );
+    expect(policy).not.toMatch(/res\.cloudinary\.com(\/\*| |$)/); // never all of Cloudinary
+  });
+
+  it("allows blob: (textures inside a 3D model, which three.js unpacks to blob: URLs), but never data:", () => {
+    const policy = contentSecurityPolicy(DEV_KEY, false);
+    expect(policy.split(" ")).toContain("blob:");
+    expect(policy).not.toContain("data:");
+  });
+
+  it.each([
+    ["no cloud name", undefined],
+    ["the .env.example placeholder", "<cloudinary-cloud-name>"],
+    ["a value with a slash", "a/b"],
+  ])("adds no Cloudinary source for %s", (_case, cloudName) => {
+    expect(cloudinaryModelSource(cloudName)).toBeNull();
+    expect(contentSecurityPolicy(DEV_KEY, false, cloudName)).not.toContain("cloudinary");
+  });
+
   it("still blocks Google without a usable Clerk key", () => {
-    expect(contentSecurityPolicy(undefined, false)).toBe("connect-src 'self' https://clerk-telemetry.com");
+    expect(contentSecurityPolicy(undefined, false)).toBe("connect-src 'self' https://clerk-telemetry.com blob:");
   });
 });
