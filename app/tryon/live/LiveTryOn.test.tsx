@@ -19,10 +19,13 @@ vi.mock("./poseTracker", () => ({ createPoseTracker: m.createPoseTracker }));
 vi.mock("./garmentLook", () => ({ loadGarmentLook: m.loadGarmentLook }));
 vi.mock("./liveScene", () => ({ createLiveScene: m.createLiveScene }));
 
+import { CAMERA_STOPPED } from "../CameraCapture";
 import LiveTryOn, { type LiveProduct } from "./LiveTryOn";
 
 const PRODUCT: LiveProduct = { name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png", category: "UPPER" };
-const track = { stop: vi.fn() };
+/** A camera track that can fire "ended" like a real one (unplugged, access turned off). New for each test. */
+const newTrack = () => Object.assign(new EventTarget(), { stop: vi.fn() });
+let track = newTrack();
 const stream = { getTracks: () => [track] } as unknown as MediaStream;
 const getUserMedia = vi.fn();
 let frames: FrameRequestCallback[] = [];
@@ -64,6 +67,7 @@ const garmentMesh = () => m.createLiveScene.mock.calls[0][1] as THREE.SkinnedMes
 describe("LiveTryOn", () => {
   beforeEach(() => {
     frames = [];
+    track = newTrack();
     getUserMedia.mockResolvedValue(stream);
     vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { mediaDevices: { getUserMedia } }));
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
@@ -167,6 +171,56 @@ describe("LiveTryOn", () => {
     expect(onCapture).not.toHaveBeenCalled();
     expect(track.stop).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Take photo" })).toBeEnabled();
+  });
+
+  it("if the camera stops by itself: says so, disables Take photo, frees the tracker and stops drawing (task 69)", async () => {
+    await renderLive();
+    await runFrame();
+    act(() => void track.dispatchEvent(new Event("ended")));
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeDisabled();
+    expect(m.closeTracker).toHaveBeenCalled();
+    m.renderScene.mockClear();
+    await runFrame(); // the frame that was already queued
+    expect(m.renderScene).not.toHaveBeenCalled();
+    expect(frames).toHaveLength(0); // and no more are asked for
+  });
+
+  it("drops a photo that was being made when the camera stopped (it could be the frozen frame)", async () => {
+    let finish: (b: Blob | null) => void = () => {};
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => (finish = callback));
+    const { onCapture } = await renderLive();
+    await runFrame();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    act(() => void track.dispatchEvent(new Event("ended")));
+    act(() => finish(new Blob(["frame"], { type: "image/jpeg" })));
+    expect(onCapture).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+  });
+
+  it("if the camera stops while MediaPipe is loading: keeps that message, and frees the tracker when it arrives", async () => {
+    let finish: (tracker: unknown) => void = () => {};
+    m.createPoseTracker.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    render(<LiveTryOn product={PRODUCT} onCapture={vi.fn()} onCancel={vi.fn()} />);
+    await act(async () => {});
+    act(() => void track.dispatchEvent(new Event("ended")));
+    await act(async () => finish({ detect: m.detect, close: m.closeTracker }));
+    expect(m.closeTracker).toHaveBeenCalled();
+    expect(m.createLiveScene).not.toHaveBeenCalled(); // it didn't start running with a dead camera
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeDisabled();
+  });
+
+  it("keeps the camera message when starting the video then fails too (the first problem is the real one)", async () => {
+    let failPlay: (error: Error) => void = () => {};
+    vi.mocked(HTMLMediaElement.prototype.play).mockReturnValue(new Promise((_resolve, reject) => (failPlay = reject)));
+    render(<LiveTryOn product={PRODUCT} onCapture={vi.fn()} onCancel={vi.fn()} />);
+    await act(async () => {});
+    act(() => void track.dispatchEvent(new Event("ended")));
+    await act(async () => failPlay(new Error("The play() request was interrupted")));
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+    expect(screen.getByRole("alert")).not.toHaveTextContent("isn't available");
   });
 
   it("Cancel stops the camera", async () => {

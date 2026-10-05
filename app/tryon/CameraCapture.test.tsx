@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import CameraCapture, { cameraErrorMessage, coverCrop } from "./CameraCapture";
+import CameraCapture, { CAMERA_STOPPED, cameraErrorMessage, coverCrop } from "./CameraCapture";
 
 // jsdom has no camera, video playback or canvas drawing, so those are faked here. No real camera is used.
-const track = { stop: vi.fn() };
+/** A camera track that can fire "ended" like a real one (unplugged, access turned off). New for each test. */
+const newTrack = () => Object.assign(new EventTarget(), { stop: vi.fn() });
+let track = newTrack();
 const stream = { getTracks: () => [track] } as unknown as MediaStream;
 const getUserMedia = vi.fn();
 const drawImage = vi.fn();
@@ -31,7 +33,7 @@ describe("CameraCapture", () => {
     vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(480);
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => callback(blob));
-    track.stop.mockClear();
+    track = newTrack();
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -111,6 +113,41 @@ describe("CameraCapture", () => {
     act(() => finish(new Blob(["frame"], { type: "image/jpeg" })));
     expect(onCancel).toHaveBeenCalled();
     expect(onCapture).not.toHaveBeenCalled();
+  });
+
+  it("if the camera stops by itself (unplugged, access turned off): says so and disables Take photo (task 69)", async () => {
+    const { onCapture } = await renderCamera();
+    act(() => void track.dispatchEvent(new Event("ended")));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Your camera stopped (was it unplugged, or was access turned off?). Cancel and try again, or choose a photo instead.",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+    expect(screen.getByRole("button", { name: "Take photo" })).toBeDisabled(); // a frozen frame can't be saved
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    expect(onCapture).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled(); // the way out still works
+  });
+
+  it("drops a photo that was being made when the camera stopped (it could be the frozen frame)", async () => {
+    let finish: (b: Blob | null) => void = () => {};
+    vi.mocked(HTMLCanvasElement.prototype.toBlob).mockImplementation((callback) => (finish = callback));
+    const { onCapture } = await renderCamera();
+    fireEvent.click(screen.getByRole("button", { name: "Take photo" }));
+    act(() => void track.dispatchEvent(new Event("ended")));
+    act(() => finish(new Blob(["frame"], { type: "image/jpeg" })));
+    expect(onCapture).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+  });
+
+  it("keeps the camera-stopped message if showing the picture then fails too (the first problem is the real one)", async () => {
+    let failPlay: (error: Error) => void = () => {};
+    vi.mocked(HTMLMediaElement.prototype.play).mockReturnValue(new Promise((_resolve, reject) => (failPlay = reject)));
+    render(<CameraCapture onCapture={vi.fn()} onCancel={vi.fn()} />);
+    await act(async () => {});
+    act(() => void track.dispatchEvent(new Event("ended")));
+    await act(async () => failPlay(new Error("The play() request was interrupted")));
+    expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
+    expect(screen.getByRole("alert")).not.toHaveTextContent("couldn't show");
   });
 
   it("if the picture can't be shown after permission was given: turns the camera off and says so", async () => {
