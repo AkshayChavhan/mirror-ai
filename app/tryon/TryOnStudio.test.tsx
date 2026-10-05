@@ -65,6 +65,9 @@ async function choosePhoto() {
 describe("TryOnStudio", () => {
   // Block bodies on purpose: a function returned from beforeEach is run by Vitest as cleanup.
   beforeEach(() => {
+    // mockReset, not just the clearAllMocks below: it also drops queued mockResolvedValueOnce results, which a
+    // test that fails early leaves behind for the next test (task 70: one failure caused a second one).
+    for (const fn of Object.values(m)) fn.mockReset();
     m.shrinkPhoto.mockResolvedValue(SMALL);
     m.createTryOnAction.mockResolvedValue({ error: null, tryOnId: "65f0c0ffee0000000000abcd" });
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:preview"), revokeObjectURL: vi.fn() }));
@@ -204,17 +207,27 @@ describe("TryOnStudio", () => {
   describe("the loading screen (task 43)", () => {
     const TRYON_ID = "65f0c0ffee0000000000abcd";
 
+    /**
+     * Wait until the page SHOWS a try-on being watched, not just until the hook was called with its id: the
+     * try-on starts in a transition, which React may pause between rendering (the hook call) and updating the
+     * page, so under load a test could look at the page too early (task 70). The address is set in an effect,
+     * and effects run only after the page has been updated.
+     */
+    async function watching(id: string) {
+      await waitFor(() => expect(window.location.search).toBe(`?tryon=${id}`));
+      expect(m.useTryOnStatus).toHaveBeenLastCalledWith(id);
+    }
+
     async function startTryOn() {
       renderStudio();
       await choosePhoto();
       fireEvent.click(screen.getByRole("button", { name: "Try on Linen Shirt" }));
-      await waitFor(() => expect(m.useTryOnStatus).toHaveBeenLastCalledWith(TRYON_ID));
+      await watching(TRYON_ID);
     }
 
     it("puts the try-on in the address, so a refresh keeps the loading screen", async () => {
-      await startTryOn();
-      // The address is set in an effect, which runs after the render that starts watching: wait for it.
-      await waitFor(() => expect(window.location.search).toBe(`?tryon=${TRYON_ID}`));
+      await startTryOn(); // waits for the address (see watching())
+      expect(window.location.search).toBe(`?tryon=${TRYON_ID}`);
     });
 
     it("says it's creating the try-on, with a spinner", async () => {
@@ -264,7 +277,7 @@ describe("TryOnStudio", () => {
       fireEvent.click(screen.getByRole("button", { name: "Try again" })); // dismiss A
       await choosePhoto();
       fireEvent.click(screen.getByRole("button", { name: "Try on Linen Shirt" })); // B starts, then fails
-      await waitFor(() => expect(m.useTryOnStatus).toHaveBeenLastCalledWith(B));
+      await watching(B);
       fireEvent.click(screen.getByRole("button", { name: "Try again" })); // dismiss B
       fireEvent.click(screen.getByRole("button", { name: "Try on Linen Shirt" })); // C can't start
       await waitFor(() => expect(screen.getByText("We couldn't upload your image. Please try again.")).toBeInTheDocument());
