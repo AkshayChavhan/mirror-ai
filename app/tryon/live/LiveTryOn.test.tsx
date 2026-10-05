@@ -14,6 +14,7 @@ const m = vi.hoisted(() => ({
   resize: vi.fn(),
   renderScene: vi.fn(),
   disposeScene: vi.fn(),
+  setBrightness: vi.fn(),
   loadGarmentModel: vi.fn(),
   posedModel: vi.fn(),
   disposeModel: vi.fn(),
@@ -84,7 +85,9 @@ describe("LiveTryOn", () => {
     m.detect.mockReturnValue(null);
     m.createPoseTracker.mockResolvedValue({ detect: m.detect, close: m.closeTracker });
     m.loadGarmentLook.mockResolvedValue({ color: "#123456", print: null });
-    m.createLiveScene.mockReturnValue({ resize: m.resize, render: m.renderScene, dispose: m.disposeScene });
+    m.createLiveScene.mockReturnValue({ resize: m.resize, render: m.renderScene, dispose: m.disposeScene, setBrightness: m.setBrightness });
+    // jsdom has no 2D canvas: by default there's no brightness sampler (tests that need one fake it).
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
@@ -301,6 +304,34 @@ describe("LiveTryOn", () => {
       late.unmount();
       await act(async () => finish(fakeModel()));
       expect(m.disposeModel).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("lighting that follows the room (task 74)", () => {
+    /** A 2D context whose every frame has this grey level (0–255). */
+    const roomContext = (grey: number) =>
+      ({ drawImage: vi.fn(), getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(16 * 16 * 4).fill(grey) })) }) as unknown as CanvasRenderingContext2D;
+
+    it("measures the camera's brightness every 15 frames and eases the garment's lighting towards it", async () => {
+      vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(roomContext(40)); // a dim room
+      await renderLive();
+      await runFrame(); // frame 0: measured
+      expect(m.setBrightness).toHaveBeenCalledTimes(1);
+      const first = m.setBrightness.mock.calls[0][0] as number;
+      expect(first).toBeLessThan(1); // dimmer than normal
+      expect(first).toBeGreaterThan(0.5); // but only part of the way: no sudden change
+      for (let i = 0; i < 14; i++) await runFrame();
+      expect(m.setBrightness).toHaveBeenCalledTimes(1); // not every frame
+      await runFrame(); // frame 15
+      expect(m.setBrightness).toHaveBeenCalledTimes(2);
+      expect(m.setBrightness.mock.calls[1][0]).toBeLessThan(first); // still easing down
+    });
+
+    it("keeps the normal lighting when the frame can't be measured (no 2D canvas)", async () => {
+      await renderLive();
+      for (let i = 0; i < 20; i++) await runFrame();
+      expect(m.setBrightness).not.toHaveBeenCalled();
+      expect(m.renderScene).toHaveBeenCalled(); // Live 3D carries on
     });
   });
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { CAMERA_STOPPED, cameraErrorMessage, coverCrop, whenCameraStops } from "../CameraCapture";
 import { smoothPose, toBodyPose, type BodyPose } from "./bodyPose";
+import { SAMPLE_EVERY_FRAMES, SAMPLE_SIZE, brightnessFactor, easeToward, sampleCameraBrightness } from "./cameraBrightness";
 import { loadGarmentLook } from "./garmentLook";
 import { loadGarmentModel, type LiveGarment } from "./garmentModel";
 import { toGarmentPose } from "./garmentPose";
@@ -61,6 +62,10 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
     let texture: THREE.Texture | null = null;
     let scene: LiveScene | null = null;
     let smoothed: BodyPose | null = null;
+    // Task 74: the room's brightness, measured every few frames from a tiny copy of the camera frame.
+    let sampler: CanvasRenderingContext2D | null = null;
+    let frameCount = 0;
+    let brightness = 1;
     cancelRef.current?.focus();
 
     /** The built-in template, coloured and printed from the product photo (task 65). */
@@ -129,6 +134,9 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
         setGarmentSource(model ? "model" : "template");
         garment.object.visible = false; // until a body is found
         scene = createLiveScene(canvas, garment.object);
+        const small = document.createElement("canvas");
+        small.width = small.height = SAMPLE_SIZE;
+        sampler = small.getContext("2d", { willReadFrequently: true }); // null: the lighting just stays normal
       } catch (liveError) {
         console.warn("[live] Live 3D couldn't start.", liveError);
         return fail(NOT_AVAILABLE);
@@ -154,6 +162,13 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
           smoothed = pose ? smoothPose(smoothed, pose, SMOOTHING) : null;
           if (smoothed) garment.pose(toGarmentPose(smoothed));
           garment.object.visible = smoothed !== null;
+          if (sampler && frameCount++ % SAMPLE_EVERY_FRAMES === 0) {
+            const luminance = sampleCameraBrightness(video, sampler);
+            if (luminance !== null) {
+              brightness = easeToward(brightness, brightnessFactor(luminance)); // gradually, never a flicker
+              scene.setBrightness(brightness);
+            }
+          }
           setBodySeen(smoothed !== null); // React skips the re-render when it's unchanged
           scene.render();
         }
