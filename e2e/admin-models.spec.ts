@@ -1,6 +1,9 @@
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_USERS } from "../scripts/e2e-clerk";
+import { E2E_USERS, redactClerkTokensInConsole } from "../scripts/e2e-clerk";
+
+// The CI log is public: hide Clerk's short-lived session tokens in anything this worker prints (task 71).
+redactClerkTokensInConsole();
 
 // Task 67 in the real app: the admin form's optional 3D model field, and the server refusing unusable models.
 // Safe to run against any database: each case also sends a "garment image" that isn't an image. The model is

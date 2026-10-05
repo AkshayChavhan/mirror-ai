@@ -1,6 +1,9 @@
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { E2E_USERS } from "../scripts/e2e-clerk";
+import { E2E_USERS, redactClerkTokensInConsole } from "../scripts/e2e-clerk";
+
+// The CI log is public: hide Clerk's short-lived session tokens in anything this worker prints (task 71).
+redactClerkTokensInConsole();
 
 // Live 3D (task 66) in a real browser: MediaPipe body tracking, the three.js garment, and the
 // Content-Security-Policy that blocks MediaPipe's usage metrics to Google (the developer's choice, 2026-10-01).
