@@ -27,6 +27,12 @@ export type GarmentPose = {
   turn: number;
   /** False when the hips are only estimated (seated): legs and skirt are then left out. */
   legsInView: boolean;
+  /**
+   * True for a mirrored preview: the person's left side is on the screen's left. An uploaded model (task 72)
+   * faces the camera, so there its RIGHT side follows the person's left, keeping prints readable like the
+   * templates.
+   */
+  mirrored: boolean;
 };
 
 // Body proportions in shoulder widths, for parts that are out of view (an average adult).
@@ -78,6 +84,7 @@ export function toGarmentPose(pose: BodyPose): GarmentPose {
     scale,
     turn: pose.mirrored ? -pose.yaw : pose.yaw,
     legsInView: legs,
+    mirrored: pose.mirrored,
     bones: {
       Spine: { ...hipCenter, angle: up, length: pose.torsoHeight, visible: true },
       Hips: { ...hipCenter, angle: segmentAngle(hipCenter, kneeCenter), length: distance(hipCenter, kneeCenter), visible: legs },

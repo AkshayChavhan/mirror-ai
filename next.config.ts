@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
     const policy = contentSecurityPolicy(
       process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
       process.env.NODE_ENV === "development",
+      process.env.CLOUDINARY_CLOUD_NAME, // Live 3D's garment models (task 72)
     );
     return [{ source: "/:path*", headers: [{ key: "Content-Security-Policy", value: policy }] }];
   },

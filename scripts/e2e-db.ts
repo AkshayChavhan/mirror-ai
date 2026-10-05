@@ -11,6 +11,8 @@ export const E2E_DATA = {
     shirt: { id: "650000000000000000000001", name: "E2E Linen Shirt" },
     dress: { id: "650000000000000000000002", name: "E2E Summer Dress" },
     hidden: { id: "650000000000000000000003", name: "E2E Hidden Jacket" },
+    /** Has an uploaded 3D model (task 72). Older than the others, so pages that open the newest garment don't pick it. */
+    model3d: { id: "650000000000000000000004", name: "E2E 3D Shirt" },
   },
   /** Share tokens: 22 base64url characters, like real ones (lib/tryons.ts). */
   shareIds: { done: "e2eDoneShareToken00000", failed: "e2eFailedShareToken000" },
@@ -18,6 +20,8 @@ export const E2E_DATA = {
   anonymousId: "0b8e4f9a-3c2d-4e5f-8a6b-7c8d9e0f1a2b",
   /** Cloudinary's public demo image, so image URLs are real https Cloudinary URLs. */
   imageUrl: "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+  /** A raw file URL in the demo account. Nothing is there: the Live 3D spec serves a generated model for it. */
+  modelUrl: "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/e2e-3d-shirt",
 } as const;
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -47,7 +51,7 @@ export function assertSafeTestDatabase(url: string): void {
 export async function seedTestDatabase(url: string): Promise<void> {
   assertSafeTestDatabase(url);
   const prisma = new PrismaClient({ datasourceUrl: url });
-  const { products, shareIds, anonymousId, imageUrl } = E2E_DATA;
+  const { products, shareIds, anonymousId, imageUrl, modelUrl } = E2E_DATA;
   try {
     // Children first, then products.
     await prisma.wishlistItem.deleteMany({});
@@ -59,6 +63,15 @@ export async function seedTestDatabase(url: string): Promise<void> {
         { id: products.shirt.id, name: products.shirt.name, imageUrl, category: "UPPER", price: 29.99, isActive: true },
         { id: products.dress.id, name: products.dress.name, imageUrl, category: "OVERALL", price: 49, isActive: true },
         { id: products.hidden.id, name: products.hidden.name, imageUrl, category: "UPPER", isActive: false },
+        {
+          id: products.model3d.id,
+          name: products.model3d.name,
+          imageUrl,
+          modelUrl,
+          category: "UPPER",
+          isActive: true,
+          createdAt: new Date("2020-01-01T00:00:00Z"),
+        },
       ],
     });
     await prisma.tryOn.createMany({

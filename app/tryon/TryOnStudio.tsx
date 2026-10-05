@@ -17,7 +17,7 @@ const LiveTryOn = dynamic(() => import("./live/LiveTryOn"), {
   loading: () => <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading Live 3D…</p>,
 });
 
-export type StudioProduct = { id: string; name: string; imageUrl: string; category: GarmentKind };
+export type StudioProduct = { id: string; name: string; imageUrl: string; category: GarmentKind; modelUrl: string | null };
 
 type Props = {
   products: StudioProduct[];

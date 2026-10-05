@@ -5,16 +5,18 @@ import * as THREE from "three";
 import { CAMERA_STOPPED, cameraErrorMessage, coverCrop, whenCameraStops } from "../CameraCapture";
 import { smoothPose, toBodyPose, type BodyPose } from "./bodyPose";
 import { loadGarmentLook } from "./garmentLook";
+import { loadGarmentModel, type LiveGarment } from "./garmentModel";
 import { toGarmentPose } from "./garmentPose";
-import { applyGarmentPose, buildGarment, type Garment, type GarmentKind } from "./garmentTemplates";
+import { applyGarmentPose, buildGarment, type GarmentKind } from "./garmentTemplates";
 import { createLiveScene, type LiveScene } from "./liveScene";
 import { createPoseTracker, type PoseTracker } from "./poseTracker";
 
 // Live 3D try-on (task 66): the front camera with a 3D garment that follows the body, all on the device.
-// Body tracking (MediaPipe, task 64) → body pose → garment pose → the 3D template (task 65), every frame.
+// Body tracking (MediaPipe, task 64) → body pose → garment pose → the 3D garment, every frame: the garment's
+// uploaded model (task 72) when it has one, else (or if the model can't be used) the built-in template (task 65).
 // "Take photo" captures the camera (without the overlay) for the realistic AI try-on, like CameraCapture.
 
-export type LiveProduct = { name: string; imageUrl: string; category: GarmentKind };
+export type LiveProduct = { name: string; imageUrl: string; category: GarmentKind; modelUrl: string | null };
 
 type Props = {
   product: LiveProduct;
@@ -30,6 +32,16 @@ const NOT_AVAILABLE = "Live 3D isn't available on this device. You can still tak
 
 type Phase = "starting" | "running" | "error";
 
+/** The garment's uploaded model, or null (after a warning) when it can't be loaded or used: then the template shows. */
+async function loadUsableModel(url: string, kind: GarmentKind): Promise<LiveGarment | null> {
+  try {
+    return await loadGarmentModel(url, kind);
+  } catch (modelError) {
+    console.warn("[live] The garment's 3D model couldn't be used; showing the built-in shape.", modelError);
+    return null;
+  }
+}
+
 export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -38,17 +50,28 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
   const [bodySeen, setBodySeen] = useState(false);
+  const [garmentSource, setGarmentSource] = useState<"model" | "template" | null>(null); // which garment is drawn
 
   useEffect(() => {
     let closed = false;
     let failed = false; // the first failure's message stays (e.g. the camera stopping while MediaPipe loads)
     let frame = 0;
     let tracker: PoseTracker | null = null;
-    let garment: Garment | null = null;
+    let garment: LiveGarment | null = null;
     let texture: THREE.Texture | null = null;
     let scene: LiveScene | null = null;
     let smoothed: BodyPose | null = null;
     cancelRef.current?.focus();
+
+    /** The built-in template, coloured and printed from the product photo (task 65). */
+    const templateGarment = (kind: GarmentKind, look: Awaited<ReturnType<typeof loadGarmentLook>>): LiveGarment => {
+      if (look.print) {
+        texture = new THREE.CanvasTexture(look.print);
+        texture.colorSpace = THREE.SRGBColorSpace; // the photo's colors as they are
+      }
+      const template = buildGarment(kind, { color: look.color, print: texture });
+      return { object: template.mesh, pose: (pose) => applyGarmentPose(template, pose), dispose: () => template.dispose() };
+    };
 
     const stopCamera = () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -86,17 +109,26 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
         if (!video || !canvas) throw new Error("The Live 3D view is gone.");
         video.srcObject = stream;
         await video.play();
-        const [loadedTracker, look] = await Promise.all([createPoseTracker(), loadGarmentLook(product.imageUrl)]);
-        // Closed or failed while loading (e.g. the camera stopped): nothing will use the tracker.
-        if (closed || failed) return loadedTracker.close();
-        tracker = loadedTracker;
-        if (look.print) {
-          texture = new THREE.CanvasTexture(look.print);
-          texture.colorSpace = THREE.SRGBColorSpace; // the photo's colors as they are
+        // The model loads alongside (it never rejects: a failure gives null). If the tracker or look fails
+        // first, a model that arrives afterwards is freed: nothing will use it.
+        const modelLoad = product.modelUrl ? loadUsableModel(product.modelUrl, product.category) : Promise.resolve(null);
+        const [loadedTracker, look] = await Promise.all([createPoseTracker(), loadGarmentLook(product.imageUrl)]).catch(
+          (setupError: unknown) => {
+            void modelLoad.then((late) => late?.dispose());
+            throw setupError;
+          },
+        );
+        const model = await modelLoad;
+        // Closed or failed while loading (e.g. the camera stopped): nothing will use the tracker or model.
+        if (closed || failed) {
+          model?.dispose();
+          return loadedTracker.close();
         }
-        garment = buildGarment(product.category, { color: look.color, print: texture });
-        garment.mesh.visible = false; // until a body is found
-        scene = createLiveScene(canvas, garment.mesh);
+        tracker = loadedTracker;
+        garment = model ?? templateGarment(product.category, look);
+        setGarmentSource(model ? "model" : "template");
+        garment.object.visible = false; // until a body is found
+        scene = createLiveScene(canvas, garment.object);
       } catch (liveError) {
         console.warn("[live] Live 3D couldn't start.", liveError);
         return fail(NOT_AVAILABLE);
@@ -120,8 +152,8 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
           const tracked = tracker.detect(video, performance.now());
           const pose = tracked ? toBodyPose(tracked.image, tracked.world, view) : null;
           smoothed = pose ? smoothPose(smoothed, pose, SMOOTHING) : null;
-          if (smoothed) applyGarmentPose(garment, toGarmentPose(smoothed));
-          garment.mesh.visible = smoothed !== null;
+          if (smoothed) garment.pose(toGarmentPose(smoothed));
+          garment.object.visible = smoothed !== null;
           setBodySeen(smoothed !== null); // React skips the re-render when it's unchanged
           scene.render();
         }
@@ -132,6 +164,7 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
 
     return () => {
       closed = true;
+      setGarmentSource(null); // a new product shows no stale "model"/"template" until its garment is ready
       cancelAnimationFrame(frame);
       stopCamera();
       tracker?.close();
@@ -139,7 +172,7 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
       texture?.dispose();
       scene?.dispose();
     };
-  }, [product.imageUrl, product.category]);
+  }, [product.imageUrl, product.category, product.modelUrl]);
 
   function takePhoto(): void {
     const video = videoRef.current;
@@ -178,7 +211,12 @@ export default function LiveTryOn({ product, onCapture, onCancel }: Props) {
       <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-lg bg-zinc-900">
         <video ref={videoRef} aria-label="Live 3D camera" playsInline muted className="h-full w-full -scale-x-100 object-cover" />
         {/* The 3D garment, drawn in the mirrored preview's pixels (the pose math already mirrors). */}
-        <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" />
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          data-garment={garmentSource ?? undefined} // "model" (uploaded) or "template": for tests and debugging
+          className="pointer-events-none absolute inset-0 h-full w-full"
+        />
       </div>
       <p role="status" className="text-sm text-zinc-600 dark:text-zinc-400">
         {status}

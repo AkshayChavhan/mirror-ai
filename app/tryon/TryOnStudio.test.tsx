@@ -17,9 +17,9 @@ let progress: Progress = { kind: "waiting", status: "PENDING", slow: false };
 // Live 3D itself is tested in live/LiveTryOn.test.tsx; here a stand-in reports the product and "takes" a photo.
 const LIVE_PHOTO = new File(["live"], "camera.jpg", { type: "image/jpeg" });
 vi.mock("./live/LiveTryOn", () => ({
-  default: ({ product, onCapture, onCancel }: { product: { name: string; category: string }; onCapture: (photo: File) => void; onCancel: () => void }) => (
+  default: ({ product, onCapture, onCancel }: { product: { name: string; category: string; modelUrl: string | null }; onCapture: (photo: File) => void; onCancel: () => void }) => (
     <div>
-      <p>{`Live 3D for ${product.name} (${product.category})`}</p>
+      <p>{`Live 3D for ${product.name} (${product.category}${product.modelUrl ? ", 3D model" : ""})`}</p>
       <button type="button" onClick={() => onCapture(LIVE_PHOTO)}>
         Fake live photo
       </button>
@@ -47,8 +47,14 @@ vi.mock("./CameraCapture", () => ({
 import TryOnStudio, { type StudioProduct } from "./TryOnStudio";
 
 const PRODUCTS: StudioProduct[] = [
-  { id: "65f0c0ffee0000000000aaa1", name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png", category: "UPPER" },
-  { id: "65f0c0ffee0000000000aaa2", name: "Summer Dress", imageUrl: "https://res.cloudinary.com/demo/image/upload/dress.png", category: "OVERALL" },
+  { id: "65f0c0ffee0000000000aaa1", name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png", category: "UPPER", modelUrl: null },
+  {
+    id: "65f0c0ffee0000000000aaa2",
+    name: "Summer Dress",
+    imageUrl: "https://res.cloudinary.com/demo/image/upload/dress.png",
+    category: "OVERALL",
+    modelUrl: "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/dress",
+  },
 ];
 const SMALL = new File(["small"], "photo.jpg", { type: "image/jpeg" });
 
@@ -144,7 +150,7 @@ describe("TryOnStudio", () => {
       renderStudio();
       fireEvent.click(screen.getByRole("button", { name: "Summer Dress" }));
       fireEvent.click(screen.getByRole("button", { name: "Live 3D" }));
-      expect(await screen.findByText("Live 3D for Summer Dress (OVERALL)")).toBeInTheDocument();
+      expect(await screen.findByText("Live 3D for Summer Dress (OVERALL, 3D model)")).toBeInTheDocument(); // with its uploaded model (task 72)
       expect(screen.queryByLabelText("Choose a photo")).not.toBeInTheDocument();
     });
 

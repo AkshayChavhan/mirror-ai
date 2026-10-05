@@ -32,6 +32,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI && !E2E_DATABASE_URL,
     timeout: 180_000,
     // Point the app at the test database. A variable already set wins over .env, so .env stays untouched.
-    env: E2E_DATABASE_URL ? { DATABASE_URL: E2E_DATABASE_URL } : {},
+    // Its garments live in Cloudinary's public "demo" account, so the app is built for that account too: its
+    // images and (Live 3D, task 72) its 3D models are then allowed by next/image and the security policy.
+    env: E2E_DATABASE_URL ? { DATABASE_URL: E2E_DATABASE_URL, CLOUDINARY_CLOUD_NAME: "demo" } : {},
   },
 });

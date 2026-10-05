@@ -100,6 +100,11 @@ describe("toGarmentPose", () => {
     expect(toGarmentPose(pose({ leftHip: { visibility: 0.1 } })).legsInView).toBe(false);
   });
 
+  it("says whether the preview is mirrored (an uploaded model's right side then follows the person's left: task 72)", () => {
+    expect(toGarmentPose(pose()).mirrored).toBe(true); // the fixture's preview is mirrored
+    expect(toGarmentPose({ ...pose(), mirrored: false }).mirrored).toBe(false);
+  });
+
   it("turns the torso the body's way: the yaw is flipped for a mirrored preview (left shoulder on the screen's left)", () => {
     expect(toGarmentPose({ ...pose(), yaw: 0.3 }).turn).toBeCloseTo(-0.3); // the fixture's preview is mirrored
     expect(toGarmentPose({ ...pose(), yaw: 0.3, mirrored: false }).turn).toBeCloseTo(0.3);

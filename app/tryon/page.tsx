@@ -26,8 +26,15 @@ export default async function TryOnPage({ searchParams }: Props) {
     error = "We couldn't load the garments. Please try again.";
   }
 
-  // Only what the browser needs: id, name, image, and category for Live 3D's template (never prices or links).
-  const studioProducts: StudioProduct[] = products.map(({ id, name, imageUrl, category }) => ({ id, name, imageUrl, category }));
+  // Only what the browser needs: id, name, image, and for Live 3D the category (its template) and the uploaded
+  // 3D model, if any (task 72). Never prices or links.
+  const studioProducts: StudioProduct[] = products.map(({ id, name, imageUrl, category, modelUrl }) => ({
+    id,
+    name,
+    imageUrl,
+    category,
+    modelUrl: modelUrl ?? null,
+  }));
   const initialProductId =
     typeof wanted === "string" && studioProducts.some((p) => p.id === wanted) ? wanted : studioProducts[0]?.id;
 

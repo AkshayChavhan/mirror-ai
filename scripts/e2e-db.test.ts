@@ -79,7 +79,12 @@ describe("seedTestDatabase", () => {
       ["E2E Linen Shirt", true],
       ["E2E Summer Dress", true],
       ["E2E Hidden Jacket", false],
+      ["E2E 3D Shirt", true],
     ]);
+    // The 3D garment (task 72): its model, and older than the rest, so "the newest garment" stays the same.
+    const model3d = products.find((p: { name: string }) => p.name === "E2E 3D Shirt");
+    expect(model3d.modelUrl).toBe(E2E_DATA.modelUrl);
+    expect(model3d.createdAt.getTime()).toBeLessThan(Date.now() - 365 * 24 * 3600 * 1000);
     const tryOns = client.tryOn.createMany.mock.calls[0][0].data;
     expect(tryOns.map((t: { shareId: string; status: string }) => [t.shareId, t.status])).toEqual([
       [E2E_DATA.shareIds.done, "DONE"],

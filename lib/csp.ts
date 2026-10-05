@@ -3,7 +3,8 @@
 // `connect-src` is set: it limits which servers a page may TALK to (fetch, XHR, WebSocket, beacons), and
 // leaves scripts, styles and images alone, so nothing else on the page can break.
 // Allowed: our own app ('self': pages, server actions, the status endpoint, the MediaPipe files) and Clerk
-// (its Frontend API, from the publishable key, and its telemetry), which every page needs for sign-in.
+// (its Frontend API, from the publishable key, and its telemetry), which every page needs for sign-in. Task 72
+// adds what Live 3D needs for uploaded 3D models: our own Cloudinary raw files, and blob: for their textures.
 // It's sent with EVERY page, not just /tryon: the browser keeps the policy of the page it first loaded, and
 // the app's links reach /tryon without loading a new page (client-side navigation).
 // The header is fixed at BUILD time (next.config.ts) from the publishable key. If Clerk ever runs through a
@@ -20,8 +21,25 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
   return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) ? `https://${host}` : null;
 }
 
+/**
+ * Where Live 3D may download garments' 3D models from (task 72): only our own Cloudinary account's raw files
+ * (a source ending in "/" matches that path and below). Null for a missing or placeholder cloud name.
+ */
+export function cloudinaryModelSource(cloudName: string | undefined): string | null {
+  return cloudName && /^[\w-]+$/.test(cloudName) ? `https://res.cloudinary.com/${cloudName}/raw/upload/` : null;
+}
+
 /** The policy header's value. In development, also WebSockets (Next's hot reload). */
-export function contentSecurityPolicy(publishableKey: string | undefined, isDev: boolean): string {
-  const sources = ["'self'", clerkFrontendApiOrigin(publishableKey), "https://clerk-telemetry.com", isDev ? "ws:" : null];
+export function contentSecurityPolicy(publishableKey: string | undefined, isDev: boolean, cloudName?: string): string {
+  const sources = [
+    "'self'",
+    clerkFrontendApiOrigin(publishableKey),
+    "https://clerk-telemetry.com",
+    // Textures inside a 3D model: three.js's GLTFLoader unpacks them to blob: URLs and fetches those (task 72).
+    // Blob URLs are made by the page itself from data it already has, so this reaches no other server.
+    "blob:",
+    cloudinaryModelSource(cloudName),
+    isDev ? "ws:" : null,
+  ];
   return `connect-src ${sources.filter(Boolean).join(" ")}`;
 }

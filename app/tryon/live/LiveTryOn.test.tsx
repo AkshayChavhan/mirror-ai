@@ -14,15 +14,19 @@ const m = vi.hoisted(() => ({
   resize: vi.fn(),
   renderScene: vi.fn(),
   disposeScene: vi.fn(),
+  loadGarmentModel: vi.fn(),
+  posedModel: vi.fn(),
+  disposeModel: vi.fn(),
 }));
 vi.mock("./poseTracker", () => ({ createPoseTracker: m.createPoseTracker }));
 vi.mock("./garmentLook", () => ({ loadGarmentLook: m.loadGarmentLook }));
 vi.mock("./liveScene", () => ({ createLiveScene: m.createLiveScene }));
+vi.mock("./garmentModel", () => ({ loadGarmentModel: m.loadGarmentModel })); // tested in garmentModel.test.ts
 
 import { CAMERA_STOPPED } from "../CameraCapture";
 import LiveTryOn, { type LiveProduct } from "./LiveTryOn";
 
-const PRODUCT: LiveProduct = { name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png", category: "UPPER" };
+const PRODUCT: LiveProduct = { name: "Linen Shirt", imageUrl: "https://res.cloudinary.com/demo/image/upload/shirt.png", category: "UPPER", modelUrl: null };
 /** A camera track that can fire "ended" like a real one (unplugged, access turned off). New for each test. */
 const newTrack = () => Object.assign(new EventTarget(), { stop: vi.fn() });
 let track = newTrack();
@@ -221,6 +225,83 @@ describe("LiveTryOn", () => {
     await act(async () => failPlay(new Error("The play() request was interrupted")));
     expect(screen.getByRole("alert")).toHaveTextContent(CAMERA_STOPPED);
     expect(screen.getByRole("alert")).not.toHaveTextContent("isn't available");
+  });
+
+  describe("the garment's uploaded 3D model (task 72)", () => {
+    const MODEL_URL = "https://res.cloudinary.com/demo/raw/upload/v1/mirror-ai/models/shirt";
+    const withModel: LiveProduct = { ...PRODUCT, modelUrl: MODEL_URL };
+    const fakeModel = () => ({ object: new THREE.Group(), pose: m.posedModel, dispose: m.disposeModel });
+
+    async function renderWith(product: LiveProduct) {
+      render(<LiveTryOn product={product} onCapture={vi.fn()} onCancel={vi.fn()} />);
+      await act(async () => {});
+    }
+
+    it("draws the uploaded model instead of the template, posing it from the body", async () => {
+      const model = fakeModel();
+      m.loadGarmentModel.mockResolvedValue(model);
+      await renderWith(withModel);
+      expect(m.loadGarmentModel).toHaveBeenCalledWith(MODEL_URL, "UPPER");
+      expect(m.createLiveScene.mock.calls[0][1]).toBe(model.object);
+      expect(document.querySelector("canvas")).toHaveAttribute("data-garment", "model");
+      expect(model.object.visible).toBe(false); // until a body is found
+      m.detect.mockReturnValue({ image: standing(), world: undefined });
+      await runFrame();
+      expect(m.posedModel).toHaveBeenCalledWith(expect.objectContaining({ scale: expect.any(Number), mirrored: true }));
+      expect(model.object.visible).toBe(true);
+    });
+
+    it("falls back to the template (with a warning) when the model can't be loaded or used", async () => {
+      m.loadGarmentModel.mockRejectedValue(new Error("The 3D model is missing the bones LeftArm."));
+      await renderWith(withModel);
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("showing the built-in shape"), expect.any(Error));
+      expect(garmentMesh().name).toBe("garment-UPPER");
+      expect(document.querySelector("canvas")).toHaveAttribute("data-garment", "template");
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(); // Live 3D still works
+    });
+
+    it("uses the template, without trying to load anything, when the garment has no model", async () => {
+      await renderWith(PRODUCT);
+      expect(m.loadGarmentModel).not.toHaveBeenCalled();
+      expect(garmentMesh().name).toBe("garment-UPPER");
+    });
+
+    it("frees a model that finishes loading after the tracker failed (Live 3D isn't available then)", async () => {
+      let finish: (model: unknown) => void = () => {};
+      m.loadGarmentModel.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      m.createPoseTracker.mockRejectedValue(new Error("no WASM"));
+      await renderWith(withModel);
+      expect(screen.getByRole("alert")).toHaveTextContent("Live 3D isn't available on this device.");
+      await act(async () => finish(fakeModel()));
+      expect(m.disposeModel).toHaveBeenCalledTimes(1);
+    });
+
+    it("forgets which garment it drew when it closes (a new product doesn't show the old one)", async () => {
+      m.loadGarmentModel.mockResolvedValue(fakeModel());
+      const view = render(<LiveTryOn product={withModel} onCapture={vi.fn()} onCancel={vi.fn()} />);
+      await act(async () => {});
+      expect(document.querySelector("canvas")).toHaveAttribute("data-garment", "model");
+      m.createPoseTracker.mockReturnValue(new Promise(() => {})); // the next product is still loading
+      view.rerender(<LiveTryOn product={{ ...withModel, modelUrl: null, imageUrl: "https://res.cloudinary.com/demo/image/upload/other.png" }} onCapture={vi.fn()} onCancel={vi.fn()} />);
+      await act(async () => {});
+      expect(document.querySelector("canvas")).not.toHaveAttribute("data-garment");
+    });
+
+    it("frees the model when Live 3D closes, and one that finishes loading after closing", async () => {
+      m.loadGarmentModel.mockResolvedValue(fakeModel());
+      const { unmount } = render(<LiveTryOn product={withModel} onCapture={vi.fn()} onCancel={vi.fn()} />);
+      await act(async () => {});
+      unmount();
+      expect(m.disposeModel).toHaveBeenCalledTimes(1);
+
+      let finish: (model: unknown) => void = () => {};
+      m.loadGarmentModel.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      const late = render(<LiveTryOn product={withModel} onCapture={vi.fn()} onCancel={vi.fn()} />);
+      await act(async () => {});
+      late.unmount();
+      await act(async () => finish(fakeModel()));
+      expect(m.disposeModel).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("Cancel stops the camera", async () => {
