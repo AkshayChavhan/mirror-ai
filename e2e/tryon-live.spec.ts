@@ -50,6 +50,12 @@ test.describe("Live 3D try-on", () => {
 
   test("tracks in the browser, then Take photo continues to the photo try-on, and MediaPipe's metrics are blocked", async ({ page }) => {
     test.slow(); // sign-in, MediaPipe's WASM + model and the metrics flush: ~17 s locally, more on CI
+    // Task 74: if the soft lighting (three.js's RoomEnvironment) can't be built, Live 3D carries on and only
+    // warns, so the browser console is where a broken environment would show.
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "warning") warnings.push(message.text());
+    });
     await signInAtHome(page);
     // Like a real visit: the home page's link, a client-side navigation (no new page load). The page keeps
     // the home page's policy, which is why every page sends it.
@@ -66,6 +72,8 @@ test.describe("Live 3D try-on", () => {
     // MediaPipe (WASM + model) and three.js started: the fake camera has no person, so it asks to step back.
     await expect(page.getByText("Step back until we can see your shoulders.")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("Live 3D isn't available on this device")).toHaveCount(0);
+    // The real RoomEnvironment was built in this browser (no "plain lights" fallback).
+    expect(warnings.filter((text) => text.includes("Soft lighting isn't available"))).toEqual([]);
 
     await page.getByRole("button", { name: "Take photo" }).click();
     await expect(page.getByRole("img", { name: "Your photo" })).toBeVisible();
